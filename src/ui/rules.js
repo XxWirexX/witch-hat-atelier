@@ -1,0 +1,65 @@
+// Onglet « Règles » : le système de magie, tel que le lecteur l'applique.
+import { makeSeal, sigil, ringOf, at, sealSVG } from '../seal.js';
+import { h } from './shared.js';
+
+function fig(seal, caption, size = 170) {
+  return h('figure', { html: sealSVG(seal, { size }) + `<figcaption>${caption}</figcaption>` });
+}
+
+export function mountRules(root) {
+  const water = (extra, opts) => makeSeal([sigil('water', { size: 0.46 }), ...extra], opts);
+  root.append(h('article', { class: 'prose' },
+    h('h2', {}, 'Comment on lit un sceau'),
+    h('p', {}, 'Dans L\'Atelier des Sorciers, la magie se dessine. Quiconque tient de l\'encre de conjuration et une plume peut lancer un sort : il suffit de tracer un sceau (陣). Le lecteur applique les règles que la série expose, chapitre après chapitre.'),
+    h('h2', {}, '1. Trois composants'),
+    h('ul', {},
+      h('li', {}, h('b', {}, 'Le sigil (紋, mon)'), ', au centre : la nature du sort — Feu, Eau, Terre, Vent (la Tétrade primaire), Lumière, Répétition… Plus il est grand par rapport au cercle, plus l\'effet est intense. Sa position exacte n\'a pas d\'importance.'),
+      h('li', {}, h('b', {}, 'Les signes (矢, ya)'), ', autour : la forme que prend la magie. Colonnes pour projeter, Lévitation pour faire flotter, Broyage pour pulvériser… Longueur, nombre, orientation et symétrie modifient l\'effet.'),
+      h('li', {}, h('b', {}, 'Le cercle'), ' : il enferme le tout et déclenche le sort à l\'instant où il se ferme. Un cercle seul, sans rien dedans, libère une simple décharge : une explosion.'),
+    ),
+    h('div', { class: 'demo-row' },
+      fig(water(ringOf('levitation', 4, { start: 45, dist: 0.72, size: 0.34 })), 'Eau + Lévitation : une sphère d\'eau flotte'),
+      fig(water(ringOf('columns', 4, { dist: 0.74, size: 0.3 })), 'Eau + Colonnes : un jet d\'eau jaillit'),
+      fig(makeSeal([]), 'Cercle nu : explosion'),
+    ),
+    h('h2', {}, '2. Équilibre et direction'),
+    h('p', {}, 'Un signe directionnel pousse dans sa direction, d\'autant plus qu\'il est long. Quatre Colonnes égales : le jet monte droit. Une Colonne plus longue : le jet part de son côté — c\'est la leçon qu\'Agott donne à Coco après le jet d\'eau raté (chapitre 3), et que Coco retourne pour inventer le Vol céleste (chapitre 4). Les signes se placent en symétrie radiale ou bilatérale ; une disposition asymétrique reste valide mais instable.'),
+    h('div', { class: 'demo-row' },
+      fig(water(ringOf('columns', 4, { dist: 0.74, size: 0.3 })), 'Équilibré : droit vers le haut'),
+      fig(water(ringOf('columns', 4, { dist: 0.74, sizes: [0.3, 0.52, 0.3, 0.3] })), 'Colonne de droite plus longue : part à droite'),
+      fig(makeSeal([sigil('wind', { y: 0.45, size: 0.45 }), at('levitation', 0, 0.28, 0.9, { rot: 0 })]), 'Un seul long signe : toute la poussée d\'un côté'),
+    ),
+    h('h2', {}, '3. Inversion'),
+    h('p', {}, 'Retourner un signe (le haut vers l\'extérieur) inverse son effet. Le Broyage réduit en poussière ; inversé, il recompose la poussière (Intégration, chapitre 17). Deux sceaux identiques dont l\'un a ses signes inversés s\'annulent.'),
+    h('div', { class: 'demo-row' },
+      fig(makeSeal([sigil('earth', { size: 0.5 }), ...ringOf('columns', 2, { start: 90, dist: 0.74, size: 0.34 }), ...ringOf('crushing', 2, { dist: 0.64, size: 0.42 })]), 'Brise-mur : Broyage à l\'endroit'),
+      fig(makeSeal([sigil('earth', { size: 0.42 }), ...ringOf('crushing', 6, { dist: 0.7, size: 0.32, inverted: true })]), 'Intégration : Broyage inversé'),
+    ),
+    h('h2', {}, '4. Rotation, portée, quantité'),
+    h('p', {}, 'Incliner les signes fait tourner l\'effet : plus d\'inclinaison, plus de vrille et moins de portée (Vent agrippeur, chapitre 14). Ajouter des signes augmente la quantité de magie ou lisse les déséquilibres. Le nombre de signes de Perforation fixe le nombre de projectiles.'),
+    h('div', { class: 'demo-row' },
+      fig(makeSeal([sigil('wind', { size: 0.48 }), ...ringOf('pulling', 4, { start: 45, dist: 0.72, size: 0.34 })]), 'Attraction droite : aspire'),
+      fig(makeSeal([sigil('wind', { size: 0.48 }), ...ringOf('pulling', 4, { start: 45, dist: 0.72, size: 0.34, tilt: 30 })]), 'Attraction inclinée : tourbillon'),
+    ),
+    h('h2', {}, '5. Brèche, sceaux liés, sceaux imbriqués'),
+    h('ul', {},
+      h('li', {}, h('b', {}, 'Brèche'), ' : on prépare un sceau en laissant le cercle ouvert ; un seul trait le ferme et déclenche le sort. Couper le cercle entre deux objets (Souliers de Sylphe, Sentier de pierres luisantes) permet d\'allumer et d\'éteindre le sort.'),
+      h('li', {}, h('b', {}, 'Sceaux liés'), ' : reliés par un trait, leurs effets se combinent ; de nombreux petits sceaux identiques liés surpassent un grand sceau de même surface (Fend-la-pluie).'),
+      h('li', {}, h('b', {}, 'Sceaux imbriqués'), ' : un sceau dans un autre ne s\'active que lorsque l\'anneau extérieur est fermé, et leurs effets s\'additionnent (Lit de sable du dragon).'),
+    ),
+    h('div', { class: 'demo-row' },
+      fig(water(ringOf('columns', 4, { dist: 0.74, size: 0.3 }), { gap: { angle: 200, width: 16 } }), 'Cercle ouvert : sort préparé, inactif'),
+      fig(makeSeal([...ringOf('convergence', 4, { start: 45, dist: 0.82, size: 0.16 })], { children: [{ seal: water(ringOf('levitation', 4, { start: 45, dist: 0.72, size: 0.3 })), x: 0, y: 0, scale: 0.58 }] }), 'Sceau imbriqué'),
+    ),
+    h('h2', {}, '6. Ce que le lecteur fait, et ne fait pas'),
+    h('p', {}, 'Le lecteur repère le cercle (ajustement d\'un cercle sur le plus grand trait), sa brèche, les cercles intérieurs, puis découpe le reste en glyphes et compare chacun aux 79 dessins du dictionnaire, dans les orientations plausibles. Il en déduit sigils, signes, inversions, symétrie, poussées et rotation, cherche le sceau le plus proche dans le grimoire et rédige la lecture. Tout se passe dans votre navigateur.'),
+    h('p', {}, 'Ses limites : les photos de pages sombres ou très inclinées, les sceaux minuscules et très denses (Carrosse de Pégase), les symboles que la communauté n\'a pas encore identifiés, et bien sûr tout ce que Kamome Shirahama n\'a pas encore révélé. Quand un tracé est douteux, corrigez-le dans le tableau « Glyphes repérés » : la lecture se recalcule.'),
+    h('h2', {}, 'Sources'),
+    h('ul', {},
+      h('li', {}, 'Kamome Shirahama, ', h('em', {}, 'Tongari Bōshi no Atelier'), ' (Kōdansha, éd. française Pika) — pages bonus du volume 1 (« Introduction aux sceaux ») et du volume 12 (« Contraptions et sceaux »).'),
+      h('li', {}, h('em', {}, 'Archives of Witch Hat Atelier'), ', premier guide officiel (MAGs, 2026), pages 146-150.'),
+      h('li', {}, 'Anime (BUG FILMS, 2026) : livres et manuels déchiffrés par la communauté (épisodes 1, 6, 11).'),
+      h('li', {}, 'Wiki indépendant Witch Hat Atelier — pages « Signs Explained », « Sigils Explained », « Magic » et fiches de sorts (CC BY-SA).'),
+    ),
+  ));
+}
