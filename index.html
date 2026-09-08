@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Grimoire — lecteur de sceaux de Witch Hat Atelier</title>
+  <meta name="description" content="Lit, compose et explique les sceaux magiques de L'Atelier des Sorciers (Witch Hat Atelier) : sigils, signes, cercle, équilibre.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='42' fill='none' stroke='%236b1a1a' stroke-width='6'/%3E%3Cpath d='M50 22 L78 72 L22 72 Z M50 22 V88' fill='none' stroke='%236b1a1a' stroke-width='5' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#lire">
+      <span class="brand-seal" aria-hidden="true"></span>
+      <span class="brand-text"><strong>Grimoire</strong><small>lecteur de sceaux · L'Atelier des Sorciers</small></span>
+    </a>
+    <nav class="tabs" role="tablist">
+      <a href="#lire" data-tab="lire" role="tab">Lire</a>
+      <a href="#composer" data-tab="composer" role="tab">Composer</a>
+      <a href="#grimoire" data-tab="grimoire" role="tab">Grimoire</a>
+      <a href="#dictionnaire" data-tab="dictionnaire" role="tab">Dictionnaire</a>
+      <a href="#regles" data-tab="regles" role="tab">Règles</a>
+    </nav>
+    <button class="theme-toggle" id="theme-toggle" type="button" title="Basculer clair/sombre" aria-label="Basculer le thème">◐</button>
+  </header>
+
+  <main id="main">
+    <section id="tab-lire" class="tab" hidden></section>
+    <section id="tab-composer" class="tab" hidden></section>
+    <section id="tab-grimoire" class="tab" hidden></section>
+    <section id="tab-dictionnaire" class="tab" hidden></section>
+    <section id="tab-regles" class="tab" hidden></section>
+  </main>
+
+  <footer class="foot">
+    <p>Projet de fan, non officiel. <em>Tongari Bōshi no Atelier</em> © Kamome Shirahama / Kōdansha. Données compilées depuis le wiki indépendant Witch Hat Atelier, les pages bonus des volumes 1 et 12 et les <em>Archives of Witch Hat Atelier</em>. Tout tourne dans votre navigateur : aucune image n'est envoyée.</p>
+  </footer>
+
+  <script type="module" src="src/app.js"></script>
+</body>
+</html>
