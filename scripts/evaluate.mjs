@@ -2,7 +2,7 @@
 import { SPELLS } from '../src/spells.js';
 import { rasterizeSeal, flatten } from '../src/seal.js';
 import { recognize } from '../src/recognizer.js';
-import { readSeal } from '../src/interpreter.js';
+import { readRecognition } from '../src/hypothesis.js';
 
 const only = process.argv[2];
 let totalTruth = 0, totalHit = 0, spellsOk = 0, n = 0;
@@ -18,7 +18,7 @@ for (const sp of SPELLS) {
   const g = new Map(); for (const k of got) g.set(k, (g.get(k) || 0) + 1);
   let hit = 0; for (const [k, v] of t) hit += Math.min(v, g.get(k) || 0);
   totalTruth += truth.length; totalHit += hit;
-  const read = rec.ok ? readSeal(rec.seal) : null;
+  const read = rec.ok ? readRecognition(rec) : null;
   const matched = read && read.match ? read.match.spell.id : '-';
   const ok = hit === truth.length && got.length === truth.length;
   if (ok) spellsOk++;

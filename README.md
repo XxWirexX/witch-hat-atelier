@@ -10,7 +10,7 @@ Tout tourne dans le navigateur, sans serveur ni dépendance : `index.html` + mod
 
 | Onglet | Rôle |
 | --- | --- |
-| **Lire** | Charge une image (glisser-déposer, fichier, collage), **dessine** un sceau à la souris/au doigt, ou génère un exemple du grimoire (avec rotation aléatoire). Le lecteur repère le cercle et sa brèche, les cercles intérieurs, découpe les glyphes, les identifie et rédige la lecture. Chaque identification se corrige d'un clic. |
+| **Lire** | Charge une image (glisser-déposer, fichier, collage), **dessine** un sceau à la souris/au doigt, ou génère un exemple du grimoire — au choix net, d'une main hésitante ou franchement mal dessiné. Le lecteur repère le cercle et sa brèche, les cercles intérieurs, découpe les glyphes, les identifie, confronte le tout au grimoire et rédige la lecture. Chaque identification se corrige d'un clic. |
 | **Composer** | Assemble un sceau : sigils (taille, position, rotation), couronnes de signes (nombre, distance, longueur, inclinaison, inversion, un signe plus long que les autres), brèche du cercle. Lecture en direct, export SVG/PNG, recette JSON, test de reconnaissance. |
 | **Grimoire** | 58 sceaux canoniques recomposés (Boule de feu, Jet d'eau, Souliers de Sylphe, Brise-mur, Intégration, Porte-pluie, Vent agrippeur, Lit de sable du dragon, Bannière de capture, Effacement de mémoire…) avec effet, chapitre, lanceurs, notes et lecture. |
 | **Dictionnaire** | 79 glyphes : 46 signes (矢), 22 sigils (紋) et 11 sigils décoratifs (装飾紋), avec noms français / anglais / japonais, catégorie (directionnel, semi-directionnel…), effet, effet inversé, rôle de la taille et du nombre, statut officiel, et les sorts qui les utilisent. |
@@ -30,12 +30,26 @@ Ou n'importe quel hébergeur statique — GitHub Pages depuis la racine du dép�
 ## Tester
 
 ```sh
-npm test             # node --test : dictionnaire, interpréteur, reconnaissance
-npm run eval         # reconnaissance sur tout le grimoire (rendu propre)
-node scripts/evaluate.mjs pyreball   # détail d'un sceau
+npm test                          # node --test : dictionnaire, interpréteur, reconnaissance, hypothèses
+npm run eval                      # relevé glyphe par glyphe sur tout le grimoire (rendu propre)
+npm run sloppy                    # lecture de sceaux mal dessinés (8 tirages par sceau)
+npm run sloppy -- 8 --severe      # au niveau de maladresse le plus élevé
+node scripts/sloppy-eval.mjs 3 pyreball --png   # détail d'un sceau, images dans /tmp
 ```
 
-Sur un rendu propre, 47 des 58 sceaux du grimoire sont relevés glyphe pour glyphe (74 % des 561 glyphes) ; les échecs sont les sceaux très denses ou imbriqués (Carrosse de Pégase, Lit de sable complet). Sur les sceaux de base tournés, décalés, épaissis et bruités, 90 % sont identifiés exactement, le reste comme « très proche ».
+### Chiffres
+
+| Épreuve | Sorts identifiés | Glyphes relevés |
+| --- | --- | --- |
+| Rendu propre | 58/58 | 408/561 (73 %), 45 sceaux relevés glyphe pour glyphe |
+| Tracé d'une main hésitante (8 tirages × 58 sceaux) | **410/464 (88 %)** | 3 478/4 488 (78 %) |
+| Tracé franchement mal dessiné | **407/464 (88 %)** | 3 386/4 488 (75 %) |
+
+« Identifié » signifie que le lecteur nomme le bon sort avec au moins 55 % de concordance — pas qu'il a relevé tous les glyphes.
+
+Un tracé maladroit, ici, c'est : traits tremblés, épaisseur variable d'un trait à l'autre, ruptures au milieu des traits, cercle ovale et bosselé, glyphes de travers, plus gros ou plus petits, décalés de leur place, taches d'encre, et le tout tourné de n'importe quel angle (`src/sloppy.js`).
+
+Les cinq sceaux qui résistent sont les plus denses de la série : Carrosse de Pégase (53 glyphes), Lit de sable du dragon (41, lu comme le Sceau de Répétition qu'il contient effectivement), Fenêtre-passage, Effacement de mémoire et Sort-miroir. Sur ceux-là, le découpage fond trop de glyphes pour qu'une hypothèse s'impose — et le lecteur le dit plutôt que de deviner.
 
 ## Comment ça marche
 
@@ -48,14 +62,19 @@ src/
   interpreter.js  analyse (sigils, signes, orientation, symétrie, poussées,
                   rotation, cercle, imbrication) + rédaction française + correspondance
   recognizer.js   image → sceau : seuillage d'Otsu, composantes connexes,
-                  cercle de Kåsa, brèche, cercles intérieurs, regroupement,
-                  appariement par distance de chanfrein aux orientations plausibles
+                  cercle de Kåsa, redressement d'ellipse, brèche, cercles intérieurs,
+                  regroupement, appariement par distance de chanfrein
+  hypothesis.js   lecture par hypothèses : confronte les candidats au grimoire,
+                  ré-identifie les tracés ambigus, sonde l'encre là où un glyphe manque
+  sloppy.js       rendu « mal dessiné » d'un sceau, pour éprouver la lecture
   ui/             les cinq onglets (vanilla JS, aucun framework)
 ```
 
 **Convention des glyphes.** Chaque dessin vit dans une boîte 100 × 100 ; pour un signe, le haut de la boîte regarde le centre du sceau quand il est « à l'endroit ». Inverser un signe = le tourner de 180° (sauf la Pluie et l'Expansion, qui ont une forme inversée propre). Le modèle de sceau place les éléments en coordonnées polaires (angle depuis midi, distance en rayons de cercle, taille en rayons) — `ringOf('levitation', 4, { start: 45, dist: 0.72, size: 0.34 })`.
 
 **Lecture.** L'interpréteur regroupe les signes par glyphe et orientation, mesure la symétrie (radiale d'ordre n, bilatérale, asymétrique), somme les poussées des signes directionnels (longueur × direction) pour trouver un déséquilibre, détecte l'inclinaison commune (rotation en vrille), lit les Régions (vers le centre / vers l'extérieur / même côté / paires opposées), le cercle (fermé, brèche, imbriqué) et compare la signature du sceau au grimoire.
+
+**Lire un sceau mal dessiné.** Sur un tracé hésitant, le bon glyphe n'arrive pas toujours en tête des candidats — mais il y figure presque toujours. Plutôt que de figer une identification par tracé puis de chercher le sceau correspondant, le lecteur fait l'inverse : chaque sceau du grimoire « réclame » les tracés qu'il explique, et le mieux-disant l'emporte. Une paire tracé/emplacement ne compte que si le glyphe, la distance au centre, la taille et l'orientation concordent — et comme un sceau tourne d'un seul bloc, l'écart angulaire doit être le même partout, ce qui sépare des sorts de composition voisine. L'hypothèse retenue relit les tracés ambigus, puis va **sonder l'encre là où ses glyphes manquants devraient être** : s'il n'y a rien, rien n'est ajouté. Enfin, les tracés qu'aucun emplacement ne réclame sont écartés et signalés comme tels. Tout cela est dit dans la lecture : le sort nommé, le pourcentage de concordance, les tracés relus, ceux retrouvés, ceux écartés, et le sort rival quand deux explications se valent. Le découpage lui-même est essayé à trois échelles de regroupement (un sceau chargé fond ses signes, un sceau aéré disperse ses sigils) et l'interprétation la mieux étayée l'emporte.
 
 **Reconnaissance.** Aucun réseau de neurones : le masque d'encre est découpé en composantes, le plus grand trait circulaire devient le cercle (ajustement algébrique de Kåsa, puis re-ajustement sur la seule bande circulaire pour détacher ce qui le touche), l'histogramme angulaire donne la brèche, les composantes restantes sont regroupées en glyphes (règles de proximité qui distinguent les sigils en plusieurs morceaux des signes conteneurs), puis chaque groupe est normalisé en 40 × 40 et comparé aux gabarits du dictionnaire par distance de chanfrein symétrique, dans les orientations plausibles (vers le centre ± 45°, inversé, absolues, affinage à 5°). Le résultat est un vrai sceau du modèle, que l'interpréteur lit comme n'importe quel autre.
 
