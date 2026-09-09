@@ -41,15 +41,15 @@ node scripts/sloppy-eval.mjs 3 pyreball --png   # détail d'un sceau, images dan
 
 | Épreuve | Sorts identifiés | Glyphes relevés |
 | --- | --- | --- |
-| Rendu propre | 58/58 | 408/561 (73 %), 45 sceaux relevés glyphe pour glyphe |
-| Tracé d'une main hésitante (8 tirages × 58 sceaux) | **410/464 (88 %)** | 3 478/4 488 (78 %) |
-| Tracé franchement mal dessiné | **407/464 (88 %)** | 3 386/4 488 (75 %) |
+| Rendu propre | 58/58 | 411/561 (73 %), 44 sceaux relevés glyphe pour glyphe |
+| Tracé d'une main hésitante (8 tirages × 58 sceaux) | **452/464 (97 %)** | 3 973/4 488 (89 %) |
+| Tracé franchement mal dessiné | **441/464 (95 %)** | 3 772/4 488 (84 %) |
 
 « Identifié » signifie que le lecteur nomme le bon sort avec au moins 55 % de concordance — pas qu'il a relevé tous les glyphes.
 
-Un tracé maladroit, ici, c'est : traits tremblés, épaisseur variable d'un trait à l'autre, ruptures au milieu des traits, cercle ovale et bosselé, glyphes de travers, plus gros ou plus petits, décalés de leur place, taches d'encre, et le tout tourné de n'importe quel angle (`src/sloppy.js`).
+Un tracé maladroit, ici, c'est : traits tremblés, épaisseur variable d'un trait à l'autre, ruptures au milieu des traits, cercle ovale et bosselé, glyphes de travers, plus gros ou plus petits, décalés de leur place, taches d'encre, et le tout tourné de n'importe quel angle (`src/sloppy.js`). La taille du dessin suit le nombre de glyphes : un sceau de 53 glyphes ne se trace pas à la main dans un cercle de 700 px.
 
-Les cinq sceaux qui résistent sont les plus denses de la série : Carrosse de Pégase (53 glyphes), Lit de sable du dragon (41, lu comme le Sceau de Répétition qu'il contient effectivement), Fenêtre-passage, Effacement de mémoire et Sort-miroir. Sur ceux-là, le découpage fond trop de glyphes pour qu'une hypothèse s'impose — et le lecteur le dit plutôt que de deviner.
+Ce qui résiste encore, sur une main hésitante : le Pare-pluie surtout — son grand signe de Pluie inversé enferme un petit sigil d'Eau, et quand les deux se touchent le sceau devient un seul tracé, indiscernable du Porte-pluie ou de la Marionnette volante, bâtis pareil. Restent une poignée de cas isolés (Faisceau de lumière lu comme Éclat de cristal, Bourse d'appel, Carrosse de Pégase). Dans ces cas le lecteur nomme un sort proche en annonçant sa concordance, ou dit qu'il ne sait pas — il ne devine pas.
 
 ## Comment ça marche
 

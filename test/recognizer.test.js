@@ -25,7 +25,7 @@ function expectRecognized(id, opts = {}) {
 }
 
 test('sceaux de base reconnus depuis un rendu propre', () => {
-  for (const id of ['pyreball', 'watershot', 'sylph_shoes', 'wall_breaker', 'integration', 'rainbringer', 'grasping_wind', 'light_beam', 'water_orb', 'crystal_shard', 'boulder_stretch', 'borrowshade', 'billow_cluster', 'bird_of_light', 'purify', 'expansion']) {
+  for (const id of ['pyreball', 'watershot', 'sylph_shoes', 'wall_breaker', 'integration', 'rainbringer', 'grasping_wind', 'light_beam', 'water_orb', 'crystal_shard', 'boulder_stretch', 'borrowshade', 'billow_cluster', 'bird_of_light', 'purify']) {
     expectRecognized(id);
   }
 });
@@ -42,6 +42,15 @@ test('robuste à la rotation, au décalage, à l\'épaisseur du trait et au brui
   expectRecognized('pyreball', { rotate: 23, offsetX: 18, offsetY: -12, thickness: 6, noise: 911 });
   expectRecognized('wall_breaker', { rotate: -35, size: 900, thickness: 7 });
   expectRecognized('grasping_wind', { rotate: 90, size: 500, thickness: 2.5 });
+});
+
+// Deux glyphes du dictionnaire ne diffèrent que par un losange : le Sigil de
+// Lumière et le Signe de Sélection. Isolé, le tracé est ambigu — c'est le sceau
+// qui tranche, et c'est bien la lecture qui doit le faire.
+test('un glyphe ambigu isolément est tranché par le sceau qui le contient', () => {
+  const out = readImage(rasterizeSeal(SPELL_BY_ID.expansion.seal, { size: 700, thickness: 4 }));
+  assert.equal(out.reading.match?.spell.id, 'expansion');
+  assert.ok(flatten(out.rec.seal).elements.some((e) => e.glyph === 'selection'), 'Signe de Sélection rétabli');
 });
 
 // La garantie rendue à l'utilisateur porte sur l'identification du sort, pas sur

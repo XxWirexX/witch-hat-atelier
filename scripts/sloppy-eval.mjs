@@ -21,7 +21,11 @@ for (const sp of SPELLS) {
   if (only && sp.id !== only) continue;
   let hits = 0; const fails = [];
   for (let seed = 1; seed <= seeds; seed++) {
-    const mask = sloppyMask(sp.seal, seed * 7919 + sp.id.length, { profile });
+    // un sceau de 53 glyphes ne se trace pas à la main dans un cercle de 700 px :
+    // la taille du dessin suit le nombre de glyphes, la maladresse reste la même
+    const nGlyphs = flatten(sp.seal).elements.length;
+    const size = Math.min(1500, Math.max(700, 620 + 16 * nGlyphs));
+    const mask = sloppyMask(sp.seal, seed * 7919 + sp.id.length, { profile, size });
     if (png) writePBM(`/tmp/sloppy-${sp.id}-${seed}.pbm`, mask);
     const out = readImage(mask);
     const rec = out?.rec ?? { ok: false, elements: [], unknown: [] };

@@ -53,7 +53,9 @@ export function sloppyMask(seal, seed = 1, opts = {}) {
   const perEl = new Map();
   const elJitter = (el) => {
     if (!perEl.has(el)) {
-      const amp = o.jitterRelative ? o.jitterPos * Math.max(el.size, 0.05) * 4 : o.jitterPos;
+      // une main hésitante décale un glyphe d'une fraction de sa propre taille :
+      // un petit signe glisse un peu, un grand signe conteneur reste à sa place
+      const amp = o.jitterRelative ? o.jitterPos * (0.5 + Math.max(el.size, 0.05)) : o.jitterPos;
       perEl.set(el, { dx: R(-amp, amp), dy: R(-amp, amp), rot: (R(-o.jitterRot, o.jitterRot) * Math.PI) / 180, s: 1 + R(-o.jitterScale, o.jitterScale) });
     }
     return perEl.get(el);

@@ -46,14 +46,28 @@ const wrap180 = (a) => ((((a + 180) % 360) + 360) % 360) - 180;
 // glyphes tournent ensemble : l'écart angulaire entre un tracé et l'emplacement
 // qu'il occupe doit être le même partout. On estime cette rotation globale sur
 // les meilleures paires, puis on s'en sert comme contrainte.
-function estimateRotation(pairs, groups, slots) {
-  let sx = 0, sy = 0;
+// Les écarts angulaires s'accumulent dans un histogramme circulaire ; ses pics
+// sont les rotations plausibles. Un sceau à symétrie d'ordre 4 en propose
+// naturellement plusieurs — on les essaie toutes plutôt que d'en moyenner une
+// qui ne correspondrait à aucune.
+const ROT_BINS = 36;
+function rotationCandidates(pairs, groups, slots, k = 3) {
+  if (!pairs.length) return [{ theta: 0, strength: 0 }];
+  const hist = new Float64Array(ROT_BINS);
+  let total = 0;
   for (const p of pairs) {
-    const d = ((groups[p.i].angle - slots[p.s].angle) * Math.PI) / 180;
-    sx += p.base * Math.cos(d); sy += p.base * Math.sin(d);
+    const d = ((groups[p.i].angle - slots[p.s].angle) % 360 + 360) % 360;
+    const b = Math.floor((d / 360) * ROT_BINS) % ROT_BINS;
+    hist[b] += p.base; hist[(b + 1) % ROT_BINS] += p.base * 0.5; hist[(b + ROT_BINS - 1) % ROT_BINS] += p.base * 0.5;
+    total += p.base;
   }
-  const strength = Math.hypot(sx, sy) / Math.max(1e-6, pairs.reduce((a, p) => a + p.base, 0));
-  return { theta: (Math.atan2(sy, sx) * 180) / Math.PI, strength };
+  const peaks = [];
+  for (let b = 0; b < ROT_BINS; b++) {
+    const prev = hist[(b + ROT_BINS - 1) % ROT_BINS], next = hist[(b + 1) % ROT_BINS];
+    if (hist[b] >= prev && hist[b] >= next && hist[b] > 0) peaks.push({ theta: (b + 0.5) * (360 / ROT_BINS), strength: hist[b] / Math.max(1e-6, 2 * total) });
+  }
+  peaks.sort((a, b) => b.strength - a.strength);
+  return peaks.slice(0, k).length ? peaks.slice(0, k) : [{ theta: 0, strength: 0 }];
 }
 
 // Affectation gloutonne des tracés aux emplacements d'un sceau, puis score de
@@ -68,7 +82,7 @@ export function scoreSpell(groups, cands, spell) {
     // absolu : où aller chercher l'encre dans l'image
     dist: Math.hypot(el.localX, el.localY), size: el.localSize,
     angle: ((Math.atan2(el.localX, -el.localY) * 180) / Math.PI + 360) % 360,
-    x: el.x, y: el.y, absSize: el.size,
+    x: el.x, y: el.y, absSize: el.size, absDist: Math.hypot(el.x, el.y),
     absAngle: ((Math.atan2(el.x, -el.y) * 180) / Math.PI + 360) % 360,
   }));
   const pairs = [];
@@ -77,34 +91,46 @@ export function scoreSpell(groups, cands, spell) {
     for (let s = 0; s < slots.length; s++) {
       const a = cands[i].get(slots[s].glyph);
       if (!a || a.confidence <= 0.05) continue;
-      const geo = gauss(g.dist - slots[s].dist, 0.3) * gauss(Math.log(Math.max(g.size, 0.02) / Math.max(slots[s].size, 0.02)), 0.75);
+      // Un glyphe d'un sceau imbriqué se mesure par rapport à son propre cercle
+      // — encore faut-il que ce cercle ait été détecté. On accepte donc l'accord
+      // dans l'un ou l'autre repère, sans exiger de savoir lequel.
+      const sl = slots[s];
+      const geo = Math.max(
+        gauss(g.dist - sl.dist, 0.3) * gauss(Math.log(Math.max(g.size, 0.02) / Math.max(sl.size, 0.02)), 0.75),
+        gauss(g.dist - sl.absDist, 0.3) * gauss(Math.log(Math.max(g.size, 0.02) / Math.max(sl.absSize, 0.02)), 0.75),
+      );
       const base = a.confidence * (0.35 + 0.65 * geo);
       if (base > 0.05) pairs.push({ base, i, s, alt: a });
     }
   }
-  const rot = estimateRotation(pairs, groups, slots);
-  for (const p of pairs) {
-    const near = slots[p.s].dist < 0.15 ? 1 : gauss(wrap180(groups[p.i].angle - slots[p.s].angle - rot.theta), 45);
-    p.cost = p.base * (1 - 0.5 * rot.strength + 0.5 * rot.strength * near);
+  let out = null;
+  for (const rot of rotationCandidates(pairs, groups, slots)) {
+    for (const p of pairs) {
+      const near = slots[p.s].dist < 0.15 ? 1 : gauss(wrap180(groups[p.i].angle - slots[p.s].angle - rot.theta), 45);
+      p.cost = p.base * (1 - 0.5 * rot.strength + 0.5 * rot.strength * near);
+    }
+    pairs.sort((p, q) => q.cost - p.cost);
+    const takenG = new Set(), takenS = new Set(), assign = [];
+    let overlap = 0, groupW = 0, slotW = 0;
+    for (const p of pairs) {
+      if (takenG.has(p.i) || takenS.has(p.s)) continue;
+      takenG.add(p.i); takenS.add(p.s);
+      assign.push({ group: p.i, slot: slots[p.s], confidence: p.alt.confidence, quality: p.cost, alt: p.alt });
+      overlap += slots[p.s].w * p.cost;
+      groupW += slots[p.s].w;
+      slotW += slots[p.s].w;
+    }
+    // un tracé inexpliqué pèse d'autant plus qu'il est net : une tache n'est pas un glyphe
+    for (let i = 0; i < groups.length; i++) if (!takenG.has(i)) groupW += UNASSIGNED_W * Math.max(0.25, groups[i].confidence);
+    for (let s = 0; s < slots.length; s++) if (!takenS.has(s)) slotW += slots[s].w * MISSING_DISCOUNT;
+    const denom = groupW + slotW;
+    const score = denom ? (2 * overlap) / denom : (groups.length ? 0 : 1);
+    const unmatched = slots.filter((_, s) => !takenS.has(s));
+    if (!out || score > out.score) {
+      out = { spell, score, assign, slots, unmatched, overlap, groupW, matchedW: slotW - unmatched.reduce((a, sl) => a + sl.w * MISSING_DISCOUNT, 0), slotCount: slots.length, missing: unmatched.length, rotation: rot };
+    }
   }
-  pairs.sort((p, q) => q.cost - p.cost);
-  const takenG = new Set(), takenS = new Set(), assign = [];
-  let overlap = 0, groupW = 0, slotW = 0;
-  for (const p of pairs) {
-    if (takenG.has(p.i) || takenS.has(p.s)) continue;
-    takenG.add(p.i); takenS.add(p.s);
-    assign.push({ group: p.i, slot: slots[p.s], confidence: p.alt.confidence, quality: p.cost, alt: p.alt });
-    overlap += slots[p.s].w * p.cost;
-    groupW += slots[p.s].w;
-    slotW += slots[p.s].w;
-  }
-  // un tracé inexpliqué pèse d'autant plus qu'il est net : une tache n'est pas un glyphe
-  for (let i = 0; i < groups.length; i++) if (!takenG.has(i)) groupW += UNASSIGNED_W * Math.max(0.25, groups[i].confidence);
-  for (let s = 0; s < slots.length; s++) if (!takenS.has(s)) slotW += slots[s].w * MISSING_DISCOUNT;
-  const denom = groupW + slotW;
-  const score = denom ? (2 * overlap) / denom : (groups.length ? 0 : 1);
-  const unmatched = slots.filter((_, s) => !takenS.has(s));
-  return { spell, score, assign, slots, unmatched, overlap, groupW, matchedW: slotW - unmatched.reduce((a, sl) => a + sl.w * MISSING_DISCOUNT, 0), slotCount: slots.length, missing: unmatched.length, rotation: rot };
+  return out;
 }
 
 // Vérification d'une hypothèse : pour chaque glyphe attendu qu'aucun tracé
@@ -114,6 +140,8 @@ export function verifyHypothesis(rec, hyp, groups, opts = {}) {
   if (!rec.probeAt || !hyp.unmatched.length) return { found: [], score: hyp.score };
   const minConf = opts.probeConfidence ?? 0.45;
   const theta = hyp.rotation.theta, c = Math.cos((theta * Math.PI) / 180), s = Math.sin((theta * Math.PI) / 180);
+  // Les tracés déjà expliqués sont mis de côté : le sondage ne doit pas se
+  // nourrir de l'encre d'un glyphe déjà lu.
   const claimed = new Set();
   for (const a of hyp.assign) for (const p of rec.pixelsOf(groups[a.group])) claimed.add(p);
   const found = [];
