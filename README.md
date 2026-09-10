@@ -27,6 +27,18 @@ npm start            # python3 -m http.server 8080
 
 Ou n'importe quel hébergeur statique — GitHub Pages depuis la racine du dépôt fonctionne tel quel.
 
+## Héberger sur son propre serveur
+
+Rien à installer côté serveur : ni Node, ni base, ni build. Il suffit de servir `index.html`, `styles.css` et `src/`.
+
+```sh
+sudo sh deploy/deploy.sh          # clone main et installe dans /var/www/grimoire
+```
+
+Puis un vhost : `deploy/Caddyfile` (HTTPS automatique) ou `deploy/nginx.conf` (+ certbot). Les deux fixent le type MIME des modules ES — sans lui le navigateur refuse de les charger — et une CSP `default-src 'self'`, puisque la page ne contacte jamais rien.
+
+Pour redéployer à chaque poussée sur `main`, `.github/workflows/deploy-vps.yml` envoie les fichiers en rsync par SSH ; les cinq secrets à renseigner sont listés en tête du fichier. Utilise une clé SSH créée pour ça, pas ta clé personnelle.
+
 ## Tester
 
 ```sh

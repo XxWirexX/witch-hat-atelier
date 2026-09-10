@@ -1,0 +1,48 @@
+# Déploiement automatique sur un VPS à chaque poussée sur main.
+#
+# À régler une fois dans Settings → Secrets and variables → Actions :
+#   VPS_HOST        adresse du serveur (ex. 51.15.0.1 ou grimoire.exemple.fr)
+#   VPS_USER        utilisateur SSH (ex. deploy)
+#   VPS_SSH_KEY     clé privée SSH dédiée au déploiement (contenu du fichier)
+#   VPS_PATH        dossier servi (ex. /var/www/grimoire)
+#   VPS_PORT        (facultatif) port SSH, 22 par défaut
+#
+# Génère une clé dédiée, pas ta clé personnelle :
+#   ssh-keygen -t ed25519 -f deploy_key -C grimoire-deploy
+#   ssh-copy-id -i deploy_key.pub deploy@ton-vps
+# puis colle deploy_key (la privée) dans VPS_SSH_KEY et efface-la de ta machine.
+
+name: Déployer sur le VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tests
+        run: npm test
+
+      - name: Clé SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${{ secrets.VPS_PORT || 22 }}" -H "${{ secrets.VPS_HOST }}" >> ~/.ssh/known_hosts
+
+      # Seuls les fichiers servis au navigateur partent sur le serveur.
+      - name: Envoi
+        run: |
+          rsync -az --delete \
+            -e "ssh -p ${{ secrets.VPS_PORT || 22 }}" \
+            index.html styles.css src \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_PATH }}/"
