@@ -51,7 +51,7 @@ const SIGNS = {
     inverted: 'inversé, probablement l\'effet contraire (étalement) — non observé',
     size: null, count: null,
     hint: 'Une des pointes du triangle regarde le centre.',
-    shape: S([line(50, 24, 78, 74, 22, 74, 50, 24)]),
+    shape: S([line(22, 26, 78, 26, 50, 76, 22, 26)]),
   },
   dancing_puppets: {
     fr: 'Signe des Marionnettes dansantes', en: 'Sign of Dancing Puppets', jp: '踊る人形の矢', romaji: 'Odoru Ningyō no Ya',
@@ -425,10 +425,15 @@ const SIGNS = {
 // ───────────────────────────── SIGILS ─────────────────────────────
 
 const fireTree = (cx, cy, s) => [
-  line(cx, cy - 32 * s, cx + 28 * s, cy + 18 * s, cx - 28 * s, cy + 18 * s, cx, cy - 32 * s),
-  line(cx, cy - 32 * s, cx, cy + 38 * s),
-  line(cx - 12 * s, cy - 2 * s, cx, cy - 12 * s, cx + 12 * s, cy - 2 * s),
-  line(cx - 16 * s, cy + 10 * s, cx, cy, cx + 16 * s, cy + 10 * s),
+  // Les deux flancs ne se rejoignent pas : le sommet reste ouvert.
+  line(cx - 5 * s, cy - 30 * s, cx - 30 * s, cy + 20 * s),
+  line(cx + 5 * s, cy - 30 * s, cx + 30 * s, cy + 20 * s),
+  line(cx - 30 * s, cy + 20 * s, cx + 30 * s, cy + 20 * s),
+  // Ailerons sortant des flancs, vers l'extérieur et vers le haut.
+  line(cx - 19 * s, cy + 2 * s, cx - 38 * s, cy - 10 * s),
+  line(cx + 19 * s, cy + 2 * s, cx + 38 * s, cy - 10 * s),
+  // Tige courte sous la base.
+  line(cx, cy + 20 * s, cx, cy + 36 * s),
 ];
 
 const windFans = (cx, cy, s) => [
@@ -438,9 +443,9 @@ const windFans = (cx, cy, s) => [
 
 // S à volutes : spirale en haut à droite, corps en S, spirale en bas à gauche.
 const windS = (cx, cy, s) => join(
-  spiral(cx + 8 * s, cy - 26 * s, 1, 7 * s, 90, 450, 14),
-  bezier([cx + 8 * s, cy - 19 * s], [cx - 22 * s, cy - 12 * s], [cx + 22 * s, cy + 12 * s], [cx - 8 * s, cy + 19 * s]),
-  spiral(cx - 8 * s, cy + 26 * s, 7 * s, 1, 270, 630, 14),
+  spiral(cx + 10 * s, cy - 22 * s, 1.5, 13 * s, 90, 495, 22),
+  bezier([cx + 10 * s, cy - 9 * s], [cx - 16 * s, cy - 6 * s], [cx + 16 * s, cy + 6 * s], [cx - 10 * s, cy + 9 * s]),
+  spiral(cx - 10 * s, cy + 22 * s, 13 * s, 1.5, 270, 675, 22),
 );
 
 // S de l'eau : hameçons aux extrémités.
@@ -463,21 +468,21 @@ const SIGILS = {
     official: true, descOfficial: true,
     effect: 'crée et manipule la lumière (qui s\'atténue avec le temps)',
     hint: 'Variante du Feu (dixit Olruggio), assez proche pour être tracée par erreur.',
-    shape: S([line(32, 32, 68, 32, 68, 68, 32, 68, 32, 32), line(50, 24, 76, 50, 50, 76, 24, 50, 50, 24), line(50, 8, 50, 92), line(8, 50, 92, 50)]),
+    shape: S([line(30, 30, 70, 30, 70, 70, 30, 70, 30, 30), line(50, 30, 70, 50, 50, 70, 30, 50, 50, 30), line(50, 12, 50, 88), line(12, 50, 88, 50)]),
   },
   water: {
     fr: 'Sigil d\'Eau', en: 'Sigil of Water', jp: '水の紋', romaji: 'Mizu no Mon', element: 'eau', tetrad: true,
     official: true, descOfficial: true,
     effect: 'manipule, recueille et crée l\'eau',
     hint: 'Les sorts d\'eau durables recueillent l\'eau plutôt que de la créer (coût moindre).',
-    shape: S([waterS(50, 50, 1), drop(22, 52, 8), drop(78, 52, 8)]),
+    shape: S([waterS(50, 50, 1), drop(20, 44, 12), drop(80, 56, 12)]),
   },
   earth: {
     fr: 'Sigil de Terre', en: 'Sigil of Earth', jp: '地の紋', romaji: 'Chi no Mon', alt: ['Sigil de Force', 'Sigil de Sol'], element: 'terre', tetrad: true,
     official: true, descOfficial: true,
     effect: 'manipule les matières solides : bois, pierre, sable, terre (sans jamais en créer)',
-    hint: 'Barre, losange suspendu et socle, ponctués de deux points.',
-    shape: S([line(22, 22, 78, 22), line(50, 22, 50, 64), line(50, 44, 70, 64, 50, 80, 30, 64, 50, 44), line(28, 84, 72, 84)], [[14, 50, 3.5], [86, 50, 3.5]]),
+    hint: 'Barre, tige et pointe ouverte vers le bas, ponctuées de deux points.',
+    shape: S([line(20, 24, 80, 24), line(50, 24, 50, 80), line(24, 42, 50, 80, 76, 42)], [[12, 44, 3.5], [88, 44, 3.5]]),
   },
   wind: {
     fr: 'Sigil de Vent', en: 'Sigil of Wind', jp: '風の紋', romaji: 'Kaze no Mon', alt: ['Sigil de Lévitation', 'Sigil d\'Air'], element: 'vent', tetrad: true,
@@ -497,10 +502,11 @@ const SIGILS = {
     fr: 'Sigil de Vent sous les pieds', en: 'Sigil of Wind Underfoot', jp: '足場のある風の紋', romaji: 'Ashiba no aru Kaze no Mon', element: 'vent', variantOf: 'wind',
     official: true, descOfficial: false,
     effect: 'soutient les objets solides suspendus dans l\'air, comme une plate-forme d\'air',
-    hint: 'S à doubles volutes enfermé dans un contour arrondi (Souliers de Sylphe).',
+    hint: 'Nœud de volutes enfermé dans des arcs concentriques (Souliers de Sylphe).',
     shape: S([
-      windS(50, 50, 0.8),
-      join(arc(50, 30, 24, 180, 360), line(74, 30, 74, 70), arc(50, 70, 24, 0, 180), line(26, 70, 26, 30)),
+      windS(50, 50, 0.62),
+      circle(50, 50, 34), circle(50, 50, 27),
+      spiral(50, 50, 6, 20, 200, 470, 26),
     ]),
   },
   whorling_wind: {
@@ -719,11 +725,58 @@ const SIGILS = {
   },
 };
 
+// ──────────────────── Fidélité des tracés ────────────────────
+//
+// Les dessins de ce dépôt sont des reconstructions vectorielles. Le nom d'un
+// glyphe peut être officiel sans que son tracé le soit : ce sont deux choses
+// différentes, et seule celle-ci dit si l'on peut se fier au dessin.
+//
+//   conforme    — confronté à un relevé de la série, et conforme.
+//   ecart       — confronté à un relevé, et différent : le dessin est à refaire.
+//   reconstruit — dessiné d'après une description, jamais confronté à un relevé.
+//   simplifie   — volontairement simplifié (les sigils décoratifs, très ornés).
+//
+// Un glyphe n'est proposé au tracé dans l'onglet Étudier que s'il est conforme :
+// faire recopier une approximation n'apprend rien et sanctionne à tort.
+
+export const FIDELITY_LABEL = {
+  conforme: 'tracé conforme au relevé',
+  ecart: 'tracé à revoir : il s\'écarte du relevé',
+  reconstruit: 'tracé reconstruit, non vérifié',
+  simplifie: 'tracé simplifié',
+};
+
+const SHAPE_CONFORME = [
+  'fire', 'light', 'water', 'earth', 'wind', 'aeriforms', 'wind_underfoot', 'crystalize',
+  'columns', 'dispersion', 'levitation', 'convergence', 'crushing', 'billow', 'rain',
+  'diamond', 'crosshair', 'dancing_puppets', 'stretch', 'binding', 'regions', 'stability',
+];
+// Un relevé existe et mon dessin ne lui correspond pas encore : c'est dit, et le
+// glyphe est écarté des exercices de tracé.
+const SHAPE_ECART = [
+  'expansion', 'windows', 'pulling', 'collection', 'lightning',
+  'detection', 'concealment', 'repetition', 'projection', 'deco_bird', 'deco_horse',
+  // Le relevé du Signe des Fenêtres est le dessin que porte aujourd'hui la
+  // Sélection : les deux sont donc suspects tant que l'un des deux n'est pas
+  // établi. Corriger la Lumière n'y a rien changé — elle reste à 0,26 de la
+  // Sélection, c'est-à-dire presque confondue.
+  'selection',
+];
+
+function fidelityOf(id, kind) {
+  if (SHAPE_CONFORME.includes(id)) return 'conforme';
+  if (SHAPE_ECART.includes(id)) return 'ecart';
+  return kind === 'decorative' ? 'simplifie' : 'reconstruit';
+}
+
 // ───────────────────────────── Export ─────────────────────────────
 
 export const GLYPHS = {};
-for (const [id, g] of Object.entries(SIGNS)) GLYPHS[id] = { id, kind: 'sign', ...g };
-for (const [id, g] of Object.entries(SIGILS)) GLYPHS[id] = { id, kind: g.decorative ? 'decorative' : 'sigil', ...g };
+for (const [id, g] of Object.entries(SIGNS)) GLYPHS[id] = { id, kind: 'sign', shapeRef: fidelityOf(id, 'sign'), ...g };
+for (const [id, g] of Object.entries(SIGILS)) {
+  const kind = g.decorative ? 'decorative' : 'sigil';
+  GLYPHS[id] = { id, kind, shapeRef: fidelityOf(id, kind), ...g };
+}
 
 export const SIGN_IDS = Object.keys(SIGNS);
 export const SIGIL_IDS = Object.keys(SIGILS).filter((id) => !SIGILS[id].decorative);

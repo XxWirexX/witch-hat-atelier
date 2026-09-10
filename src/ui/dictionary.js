@@ -1,5 +1,5 @@
 // Onglet « Dictionnaire » : sigils et signes.
-import { GLYPHS, SIGN_IDS, SIGIL_IDS, DECORATIVE_IDS, DIR_LABEL, ELEMENT_LABEL } from '../glyphs.js';
+import { GLYPHS, SIGN_IDS, SIGIL_IDS, DECORATIVE_IDS, DIR_LABEL, ELEMENT_LABEL, FIDELITY_LABEL } from '../glyphs.js';
 import { glyphSVG } from '../seal.js';
 import { spellsUsing } from '../spells.js';
 import { h, openDrawer } from './shared.js';
@@ -21,6 +21,7 @@ export function glyphDetail(id, ctx) {
       g.element ? h('span', { class: 'badge grey' }, ELEMENT_LABEL[g.element] || g.element) : null,
       h('span', { class: `badge ${g.official ? 'ok' : 'warn'}` }, g.official ? 'nom officiel' : 'nom donné par les fans'),
       g.descOfficial ? h('span', { class: 'badge ok' }, 'effet confirmé') : h('span', { class: 'badge grey' }, 'effet déduit'),
+      h('span', { class: `badge ${g.shapeRef === 'conforme' ? 'ok' : g.shapeRef === 'ecart' ? 'warn' : 'grey'}` }, FIDELITY_LABEL[g.shapeRef]),
       g.forbidden ? h('span', { class: 'badge warn' }, 'magie interdite') : null,
     ),
     pair,
@@ -38,6 +39,11 @@ export function glyphDetail(id, ctx) {
     g.count ? h('p', {}, h('b', {}, 'Nombre : '), g.count + '.') : null,
     g.tilt ? h('p', {}, h('b', {}, 'Inclinaison : '), g.tilt + '.') : null,
     g.hint ? h('p', { class: 'muted' }, g.hint) : null,
+    g.shapeRef !== 'conforme' ? h('p', { class: 'notice' }, g.shapeRef === 'ecart'
+      ? 'Le relevé de la série diffère de ce dessin : fiez-vous à l\'œuvre, pas à ce tracé. Il est écarté des exercices de tracé.'
+      : g.shapeRef === 'simplifie'
+        ? 'Les sigils décoratifs sont très ornés ; ce dessin en est une version simplifiée.'
+        : 'Ce dessin a été reconstruit d\'après une description et n\'a pas été confronté à un relevé de la série.') : null,
     h('h3', {}, `Sorts qui l'utilisent (${using.length})`),
     using.length ? h('div', { class: 'chips' }, ...using.map((sp) => h('span', { class: 'chip', onClick: () => openDrawer(spellDetail(sp, ctx)) }, sp.fr))) : h('p', { class: 'muted' }, 'Aucun sceau du grimoire — mais le glyphe est reconnu par le lecteur.'),
   );

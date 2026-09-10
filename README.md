@@ -14,7 +14,7 @@ Tout tourne dans le navigateur, sans serveur ni dépendance : `index.html` + mod
 | **Étudier** | Apprendre les 137 cartes du grimoire par leçons, les réviser en répétition espacée, puis passer une épreuve chronométrée. Les questions de tracé sont corrigées par le reconnaisseur : on dessine le glyphe demandé, il dit ce qu'il lit. |
 | **Composer** | Assemble un sceau : sigils (taille, position, rotation), couronnes de signes (nombre, distance, longueur, inclinaison, inversion, un signe plus long que les autres), brèche du cercle. Lecture en direct, export SVG/PNG, recette JSON, test de reconnaissance. |
 | **Grimoire** | 58 sceaux canoniques recomposés (Boule de feu, Jet d'eau, Souliers de Sylphe, Brise-mur, Intégration, Porte-pluie, Vent agrippeur, Lit de sable du dragon, Bannière de capture, Effacement de mémoire…) avec effet, chapitre, lanceurs, notes et lecture. |
-| **Dictionnaire** | 79 glyphes : 46 signes (矢), 22 sigils (紋) et 11 sigils décoratifs (装飾紋), avec noms français / anglais / japonais, catégorie (directionnel, semi-directionnel…), effet, effet inversé, rôle de la taille et du nombre, statut officiel, et les sorts qui les utilisent. |
+| **Dictionnaire** | 79 glyphes : 46 signes (矢), 22 sigils (紋) et 11 sigils décoratifs (装飾紋), avec noms français / anglais / japonais, catégorie (directionnel, semi-directionnel…), effet, effet inversé, rôle de la taille et du nombre, statut officiel, **fidélité du tracé** et les sorts qui les utilisent. |
 | **Règles** | Le système de magie tel que la série l'expose, illustré par des sceaux rendus à la volée. |
 
 ## Lancer
@@ -60,15 +60,32 @@ node scripts/sloppy-eval.mjs 3 pyreball --png   # détail d'un sceau, images dan
 
 | Épreuve | Sorts identifiés | Glyphes relevés |
 | --- | --- | --- |
-| Rendu propre | 58/58 | 411/561 (73 %), 44 sceaux relevés glyphe pour glyphe |
-| Tracé d'une main hésitante (8 tirages × 58 sceaux) | **452/464 (97 %)** | 3 973/4 488 (89 %) |
-| Tracé franchement mal dessiné | **441/464 (95 %)** | 3 772/4 488 (84 %) |
+| Rendu propre | 58/58 | 413/561 (74 %), 46 sceaux relevés glyphe pour glyphe |
+| Tracé d'une main hésitante (8 tirages × 58 sceaux) | **452/464 (97 %)** | 3 956/4 488 (88 %) |
+| Tracé franchement mal dessiné | **435/464 (94 %)** | 3 774/4 488 (84 %) |
 
 « Identifié » signifie que le lecteur nomme le bon sort avec au moins 55 % de concordance — pas qu'il a relevé tous les glyphes.
 
 Un tracé maladroit, ici, c'est : traits tremblés, épaisseur variable d'un trait à l'autre, ruptures au milieu des traits, cercle ovale et bosselé, glyphes de travers, plus gros ou plus petits, décalés de leur place, taches d'encre, et le tout tourné de n'importe quel angle (`src/sloppy.js`). La taille du dessin suit le nombre de glyphes : un sceau de 53 glyphes ne se trace pas à la main dans un cercle de 700 px.
 
 Ce qui résiste encore, sur une main hésitante : le Pare-pluie surtout — son grand signe de Pluie inversé enferme un petit sigil d'Eau, et quand les deux se touchent le sceau devient un seul tracé, indiscernable du Porte-pluie ou de la Marionnette volante, bâtis pareil. Restent une poignée de cas isolés (Faisceau de lumière lu comme Éclat de cristal, Bourse d'appel, Carrosse de Pégase). Dans ces cas le lecteur nomme un sort proche en annonçant sa concordance, ou dit qu'il ne sait pas — il ne devine pas.
+
+## Ce que valent les dessins
+
+**Le nom d'un glyphe peut être officiel sans que son tracé le soit.** Ce sont deux choses différentes, et le dictionnaire les sépare désormais. Chaque glyphe porte un état de fidélité (`shapeRef`) :
+
+| État | Sens | Nombre |
+| --- | --- | --- |
+| `conforme` | confronté à un relevé de la série, et conforme | 22 |
+| `ecart` | confronté à un relevé, et **différent** — le dessin est à refaire | 12 |
+| `reconstruit` | dessiné d'après une description, jamais confronté à un relevé | 36 |
+| `simplifie` | volontairement simplifié (les sigils décoratifs, très ornés) | 9 |
+
+L'état est affiché sur la fiche du Dictionnaire et sur les fiches de leçon, avec la réserve écrite en toutes lettres. Et **seuls les glyphes `conforme` sont proposés au tracé** dans l'épreuve : faire recopier une approximation n'apprend rien et sanctionne à tort.
+
+Sept tracés ont été refaits après confrontation aux relevés : le Feu (sommet ouvert, ailerons sortants, pas de chevrons intérieurs), la Lumière (un cercle parasite en trop), l'Eau (gouttes franches), la Terre (pointe ouverte, sans socle), le Vent et les Gaz (vraies volutes), le Vent sous les pieds (nœud de volutes, et non un S en capsule) et la Convergence (le triangle pointe vers le bas). La correction a fait progresser la lecture d'un rendu propre — 46 sceaux relevés glyphe pour glyphe contre 44 — et **reculer** légèrement celle d'un tracé franchement mal dessiné, de 95 % à 94 %. C'est logique et assumé : mes anciens dessins inventés étaient plus faciles à distinguer les uns des autres que les vrais, qui se ressemblent davantage. La fidélité à l'œuvre passe avant le score du banc d'essai.
+
+Les douze `ecart` restants sont nommés dans `src/glyphs.js` et attendent d'être redessinés. Le cas le plus gênant reste le Signe des Fenêtres : son relevé correspond au dessin que porte aujourd'hui le Signe de Sélection. Les démêler demande de savoir ce qu'est vraiment la Sélection, ce que je n'ai pas — les deux sont donc marqués `ecart`. Retirer le cercle parasite de la Lumière n'a d'ailleurs pas suffi à la séparer de la Sélection : elles restent à 0,26 l'une de l'autre, c'est-à-dire presque confondues.
 
 ## Apprendre
 
@@ -85,7 +102,7 @@ Sept formes de questions : nommer un glyphe, le reconnaître parmi quatre dessin
 ```
 src/
   geometry.js     primitives de tracé (polylignes, arcs, Bézier, spirales)
-  glyphs.js       le dictionnaire : métadonnées + dessin vectoriel de chaque glyphe
+  glyphs.js       le dictionnaire : métadonnées, fidélité du tracé, dessin vectoriel
   spells.js       le grimoire : compositions des sceaux canoniques
   seal.js         modèle de sceau, placement polaire, rendu SVG, rastérisation
   interpreter.js  analyse (sigils, signes, orientation, symétrie, poussées,
@@ -118,8 +135,9 @@ src/
 - Kamome Shirahama, *Tongari Bōshi no Atelier* (Kōdansha ; éd. française Pika) — pages bonus du volume 1 (« Introduction aux sceaux ») et du volume 12 (« Contraptions et sceaux »).
 - *Archives of Witch Hat Atelier — The First Official World Guide* (MAGs, 2026), p. 146-150.
 - Anime *Witch Hat Atelier* (BUG FILMS, 2026) : manuels déchiffrés par la communauté (épisodes 1, 6, 11).
+- Wiki Witch Hat Atelier sur Fandom (witch-hat-atelier.fandom.com) — relevés des sigils et des signes ayant servi à vérifier les tracés.
 - Wiki indépendant Witch Hat Atelier (witchhatatelier.telepedia.net) — pages *Signs Explained*, *Sigils Explained*, *Magic* et fiches de sorts, sous licence CC BY-SA. Les relevés (« redraws ») de la communauté ont servi de référence pour vérifier l'orientation des signes.
 
-Les dessins de glyphes de ce dépôt sont des reconstructions vectorielles originales, simplifiées pour les sigils décoratifs. Les symboles que la communauté n'a pas encore identifiés sont omis et signalés dans les notes des sorts.
+Les dessins de glyphes de ce dépôt sont des reconstructions vectorielles originales. Leur fidélité est déclarée glyphe par glyphe (voir « Ce que valent les dessins ») : ne prenez pas un tracé `reconstruit` pour le symbole de l'œuvre. Les symboles que la communauté n'a pas encore identifiés sont omis et signalés dans les notes des sorts.
 
 Projet de fan, non officiel, sans lien avec l'autrice ni ses éditeurs. Code sous licence MIT.

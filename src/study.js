@@ -293,7 +293,10 @@ export function typesFor(key) {
   const { kind, id } = parseItem(key);
   if (kind === 'spell') return ['spell-name', 'spell-effect', 'spell-seal'];
   const g = GLYPHS[id];
-  const out = ['glyph-name', 'glyph-shape', 'glyph-effect', 'glyph-draw'];
+  const out = ['glyph-name', 'glyph-shape', 'glyph-effect'];
+  // On ne fait recopier que les tracés confrontés à un relevé : demander de
+  // reproduire une approximation n'apprend rien et sanctionne à tort.
+  if (g.shapeRef === 'conforme') out.push('glyph-draw');
   if (g.kind === 'sign' && g.inverted) out.push('glyph-inverted');
   return out;
 }
