@@ -4,13 +4,14 @@
 
 Donnez-lui un sceau — photo, scan, dessin à main levée ou composition — et il vous dit ce que ferait le sort : quel élément, quelle forme, dans quelle direction, s'il est équilibré, s'il est actif, et à quel sort connu il correspond.
 
-Tout tourne dans le navigateur, sans serveur ni dépendance : `index.html` + modules ES.
+Tout tourne dans le navigateur, sans serveur ni dépendance : `index.html` + modules ES. L'application s'installe au téléphone et fonctionne hors ligne.
 
 ## Ce que ça fait
 
 | Onglet | Rôle |
 | --- | --- |
 | **Lire** | Charge une image (glisser-déposer, fichier, collage), **dessine** un sceau à la souris/au doigt, ou génère un exemple du grimoire — au choix net, d'une main hésitante ou franchement mal dessiné. Le lecteur repère le cercle et sa brèche, les cercles intérieurs, découpe les glyphes, les identifie, confronte le tout au grimoire et rédige la lecture. Chaque identification se corrige d'un clic. |
+| **Étudier** | Apprendre les 137 cartes du grimoire par leçons, les réviser en répétition espacée, puis passer une épreuve chronométrée. Les questions de tracé sont corrigées par le reconnaisseur : on dessine le glyphe demandé, il dit ce qu'il lit. |
 | **Composer** | Assemble un sceau : sigils (taille, position, rotation), couronnes de signes (nombre, distance, longueur, inclinaison, inversion, un signe plus long que les autres), brèche du cercle. Lecture en direct, export SVG/PNG, recette JSON, test de reconnaissance. |
 | **Grimoire** | 58 sceaux canoniques recomposés (Boule de feu, Jet d'eau, Souliers de Sylphe, Brise-mur, Intégration, Porte-pluie, Vent agrippeur, Lit de sable du dragon, Bannière de capture, Effacement de mémoire…) avec effet, chapitre, lanceurs, notes et lecture. |
 | **Dictionnaire** | 79 glyphes : 46 signes (矢), 22 sigils (紋) et 11 sigils décoratifs (装飾紋), avec noms français / anglais / japonais, catégorie (directionnel, semi-directionnel…), effet, effet inversé, rôle de la taille et du nombre, statut officiel, et les sorts qui les utilisent. |
@@ -25,7 +26,13 @@ npm start            # python3 -m http.server 8080
 # puis http://localhost:8080
 ```
 
-Ou n'importe quel hébergeur statique — GitHub Pages depuis la racine du dépôt fonctionne tel quel.
+Ou n'importe quel hébergeur statique — GitHub Pages depuis la racine du dépôt fonctionne tel quel. Servi en HTTPS, le navigateur propose de l'installer (`manifest.webmanifest`) et `sw.js` met tout en cache : une fois ouverte, l'application n'a plus besoin du réseau.
+
+Les icônes sont produites par le rastériseur du projet, sans dépendance :
+
+```sh
+node scripts/make-icons.mjs   # → icons/icon-192.png, icons/icon-512.png
+```
 
 ## Héberger sur son propre serveur
 
@@ -42,7 +49,7 @@ Pour redéployer à chaque poussée sur `main`, `.github/workflows/deploy-vps.ym
 ## Tester
 
 ```sh
-npm test                          # node --test : dictionnaire, interpréteur, reconnaissance, hypothèses
+npm test                          # node --test : dictionnaire, interpréteur, reconnaissance, hypothèses, étude
 npm run eval                      # relevé glyphe par glyphe sur tout le grimoire (rendu propre)
 npm run sloppy                    # lecture de sceaux mal dessinés (8 tirages par sceau)
 npm run sloppy -- 8 --severe      # au niveau de maladresse le plus élevé
@@ -63,6 +70,16 @@ Un tracé maladroit, ici, c'est : traits tremblés, épaisseur variable d'un tra
 
 Ce qui résiste encore, sur une main hésitante : le Pare-pluie surtout — son grand signe de Pluie inversé enferme un petit sigil d'Eau, et quand les deux se touchent le sceau devient un seul tracé, indiscernable du Porte-pluie ou de la Marionnette volante, bâtis pareil. Restent une poignée de cas isolés (Faisceau de lumière lu comme Éclat de cristal, Bourse d'appel, Carrosse de Pégase). Dans ces cas le lecteur nomme un sort proche en annonçant sa concordance, ou dit qu'il ne sait pas — il ne devine pas.
 
+## Apprendre
+
+L'onglet **Étudier** traite les 79 glyphes et les 58 sceaux comme 137 cartes.
+
+- **Apprendre** — 23 leçons dans l'ordre où la série présente sa magie : la tétrade primaire, les autres sigils, les signes par catégorie, l'inversion, les sigils décoratifs, puis les sceaux entiers. Chaque leçon montre ses fiches, puis interroge dessus.
+- **Réviser** — répétition espacée (Leitner, sept boîtes) : une carte réussie s'éloigne de 1, 2, 4… jusqu'à 32 jours, une carte ratée redescend d'un cran et revient dans la séance. La progression tient dans le stockage local du navigateur ; elle ne part nulle part.
+- **L'épreuve** — 12, 24 ou 40 questions chronométrées, tirées dans tout le dictionnaire et tout le grimoire, avec des quotas par type pour que deux épreuves se valent. Aucune correction avant la fin, puis la copie détaillée et les leçons à reprendre.
+
+Sept formes de questions : nommer un glyphe, le reconnaître parmi quatre dessins, en donner l'effet, dire ce que devient cet effet une fois le signe inversé, nommer un sort d'après son sceau, en donner l'effet — et **le tracer**. Cette dernière est corrigée par `classifyGlyph` : le tracé est normalisé et comparé aux gabarits du dictionnaire, sans qu'aucun cercle ne vienne le situer. Un trait honnête mais tremblé passe (99 % des glyphes acceptés sur un tracé penché jusqu'à 18°, d'épaisseur inégale et taché) ; un glyphe étranger, non.
+
 ## Comment ça marche
 
 ```
@@ -79,7 +96,8 @@ src/
   hypothesis.js   lecture par hypothèses : confronte les candidats au grimoire,
                   ré-identifie les tracés ambigus, sonde l'encre là où un glyphe manque
   sloppy.js       rendu « mal dessiné » d'un sceau, pour éprouver la lecture
-  ui/             les cinq onglets (vanilla JS, aucun framework)
+  study.js        curriculum, questions, révision espacée (Leitner), examen
+  ui/             les six onglets (vanilla JS, aucun framework)
 ```
 
 **Convention des glyphes.** Chaque dessin vit dans une boîte 100 × 100 ; pour un signe, le haut de la boîte regarde le centre du sceau quand il est « à l'endroit ». Inverser un signe = le tourner de 180° (sauf la Pluie et l'Expansion, qui ont une forme inversée propre). Le modèle de sceau place les éléments en coordonnées polaires (angle depuis midi, distance en rayons de cercle, taille en rayons) — `ringOf('levitation', 4, { start: 45, dist: 0.72, size: 0.34 })`.

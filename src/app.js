@@ -1,10 +1,11 @@
 import { mountRead } from './ui/read.js';
+import { mountStudy } from './ui/study.js';
 import { mountCompose } from './ui/compose.js';
 import { mountGrimoire } from './ui/grimoire.js';
 import { mountDictionary } from './ui/dictionary.js';
 import { mountRules } from './ui/rules.js';
 
-const TABS = ['lire', 'composer', 'grimoire', 'dictionnaire', 'regles'];
+const TABS = ['lire', 'etudier', 'composer', 'grimoire', 'dictionnaire', 'regles'];
 const mounted = {};
 const bus = new EventTarget();
 
@@ -21,7 +22,7 @@ function activate(name) {
   if (!mounted[name]) {
     const sec = document.getElementById(`tab-${name}`);
     const ctx = { bus, goto: (tab, payload) => { if (payload) bus.dispatchEvent(new CustomEvent(`open:${tab}`, { detail: payload })); location.hash = tab; } };
-    ({ lire: mountRead, composer: mountCompose, grimoire: mountGrimoire, dictionnaire: mountDictionary, regles: mountRules })[name](sec, ctx);
+    ({ lire: mountRead, etudier: mountStudy, composer: mountCompose, grimoire: mountGrimoire, dictionnaire: mountDictionary, regles: mountRules })[name](sec, ctx);
     mounted[name] = true;
   }
   bus.dispatchEvent(new CustomEvent('tab', { detail: name }));
@@ -45,8 +46,19 @@ document.getElementById('theme-toggle').addEventListener('click', () => {
   try { localStorage.setItem('grimoire-theme', root.dataset.theme); } catch { /* ignore */ }
 });
 
-// Pré-monte l'onglet Composer si on y saute avec un sort (événement émis avant le montage)
-bus.addEventListener('open:composer', (e) => { sessionStorage.setItem('grimoire-open-composer', JSON.stringify(e.detail)); });
-bus.addEventListener('open:lire', (e) => { sessionStorage.setItem('grimoire-open-lire', JSON.stringify(e.detail)); });
+// Sauter vers un onglet pas encore monté : l'événement partirait dans le vide,
+// donc la charge utile est mise de côté et relue au montage.
+for (const t of TABS) {
+  bus.addEventListener(`open:${t}`, (e) => {
+    if (mounted[t] || !e.detail) return;
+    try { sessionStorage.setItem(`grimoire-open-${t}`, JSON.stringify(e.detail)); } catch { /* stockage indisponible */ }
+  });
+}
 
 route();
+
+// Hors ligne et installation au téléphone. Le service worker n'existe qu'en
+// http(s) : ouvert en file://, l'enregistrement échoue sans conséquence.
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* mode hors ligne indisponible */ }); });
+}

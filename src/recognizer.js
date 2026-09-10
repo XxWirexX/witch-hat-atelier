@@ -792,3 +792,66 @@ function toElement(e) {
 }
 
 export function clearTemplateCache() { tplCache.clear(); }
+
+// ───────────────────────── Glyphe dessiné seul ─────────────────────────
+
+// Un glyphe tracé hors de tout sceau (exercice « dessinez ce signe ») : il n'y a
+// ni cercle ni voisin pour trancher, donc toute l'encre est prise en bloc,
+// normalisée et comparée aux gabarits. Une main libre penche : on essaie
+// plusieurs inclinaisons, d'abord grossièrement, puis finement sur les meilleurs.
+export function classifyGlyph(inputMask, opts = {}) {
+  const ids = opts.ids ?? Object.keys(GLYPHS);
+  const allowInverted = opts.allowInverted ?? true;
+  const tilt = opts.tilt ?? 14;
+
+  const mask = downsample(inputMask, 400);
+  const sw = estimateStrokeWidth(mask);
+  const { comps } = components(mask, Math.max(1, Math.round(sw * 1.2)));
+  if (!comps.length) return [];
+
+  // Les points isolés sont de l'encre parasite, pas un morceau du glyphe.
+  const total = comps.reduce((s, c) => s + c.area, 0);
+  const keep = comps.filter((c) => c.area >= Math.max(6, total * 0.015));
+  if (!keep.length) return [];
+
+  const W = mask.width;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const c of keep) { if (c.x0 < x0) x0 = c.x0; if (c.y0 < y0) y0 = c.y0; if (c.x1 > x1) x1 = c.x1; if (c.y1 > y1) y1 = c.y1; }
+  const pts = [];
+  for (const c of keep) for (const p of c.pix) pts.push([(p % W) - x0, ((p / W) | 0) - y0]);
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  if (pts.length < 12) return [];
+
+  const coarse = candidateOf(pts, w, h, TPL);
+  const invertible = (id) => allowInverted && GLYPHS[id].kind === 'sign' && GLYPHS[id].dir !== 'non' && GLYPHS[id].dir !== 'asymmetric';
+
+  const ranked = [];
+  for (const id of ids) {
+    if (!GLYPHS[id]) continue;
+    const poses = [[0, false], [-tilt, false], [tilt, false]];
+    if (invertible(id)) poses.push([0, true], [-tilt, true], [tilt, true]);
+    let best = null;
+    for (const [rot, inverted] of poses) {
+      const sc = chamfer(coarse, template(id, rot, inverted, TPL));
+      if (!best || sc < best.score) best = { glyph: id, inverted, rot, score: sc };
+    }
+    ranked.push(best);
+  }
+  ranked.sort((a, b) => a.score - b.score);
+
+  // Second passage à haute résolution : à 40 px, deux grands glyphes voisins se
+  // ressemblent trop pour être départagés.
+  const fine = candidateOf(pts, w, h, TPL_FINE);
+  const step = Math.max(4, Math.round(tilt / 2));
+  for (const a of ranked.slice(0, 6)) {
+    let best = null;
+    for (let d = -tilt; d <= tilt; d += step) {
+      const sc = chamfer(fine, template(a.glyph, a.rot + d, a.inverted, TPL_FINE));
+      if (!best || sc < best.score) best = { score: sc, rot: a.rot + d };
+    }
+    if (best) { a.score = best.score; a.rot = best.rot; }
+  }
+  ranked.sort((a, b) => a.score - b.score);
+
+  return ranked.map((r) => ({ ...r, confidence: scoreToConfidence(r.score) }));
+}

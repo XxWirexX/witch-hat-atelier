@@ -44,5 +44,5 @@ jobs:
         run: |
           rsync -az --delete \
             -e "ssh -p ${{ secrets.VPS_PORT || 22 }}" \
-            index.html styles.css src \
+            index.html styles.css manifest.webmanifest sw.js src icons \
             "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_PATH }}/"

@@ -15,6 +15,12 @@ grimoire.exemple.fr {
 	header @js Content-Type "text/javascript; charset=utf-8"
 
 	# Le code change à chaque déploiement : on le revalide, on ne le fige pas.
+	@manifest path *.webmanifest
+	header @manifest Content-Type "application/manifest+json; charset=utf-8"
+
+	# Le service worker décide de tout le reste : il ne doit jamais être figé.
+	header /sw.js Cache-Control "no-cache"
+	header /*.webmanifest Cache-Control "no-cache"
 	header /*.js Cache-Control "no-cache"
 	header /*.css Cache-Control "no-cache"
 	header /index.html Cache-Control "no-cache"

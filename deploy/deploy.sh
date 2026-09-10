@@ -23,7 +23,7 @@ git clone --depth 1 --branch "$BRANCH" "$REPO" "$work/src"
 # Ce qui est servi au navigateur, et rien de plus : ni tests, ni scripts, ni .git.
 echo "→ installation dans $DEST"
 mkdir -p "$DEST"
-for path in index.html styles.css src; do
+for path in index.html styles.css manifest.webmanifest sw.js src icons; do
   rm -rf "$DEST/${path:?}"
   cp -r "$work/src/$path" "$DEST/$path"
 done
