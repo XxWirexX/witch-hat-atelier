@@ -11,7 +11,7 @@ Tout tourne dans le navigateur, sans serveur ni dépendance : `index.html` + mod
 | Onglet | Rôle |
 | --- | --- |
 | **Lire** | Charge une image (glisser-déposer, fichier, collage), **dessine** un sceau à la souris/au doigt, ou génère un exemple du grimoire — au choix net, d'une main hésitante ou franchement mal dessiné. Le lecteur repère le cercle et sa brèche, les cercles intérieurs, découpe les glyphes, les identifie, confronte le tout au grimoire et rédige la lecture. Chaque identification se corrige d'un clic. |
-| **Étudier** | Apprendre les 137 cartes du grimoire par leçons, les réviser en répétition espacée, puis passer une épreuve chronométrée. Les questions de tracé sont corrigées par le reconnaisseur : on dessine le glyphe demandé, il dit ce qu'il lit. |
+| **Étudier** | **L'atelier** : six exercices de tracé, du premier cercle au sceau entier, où l'on dessine et où l'application mesure ce qu'on a dessiné. Plus, pour réviser les noms, 137 cartes en répétition espacée et une épreuve chronométrée. |
 | **Composer** | Assemble un sceau : sigils (taille, position, rotation), couronnes de signes (nombre, distance, longueur, inclinaison, inversion, un signe plus long que les autres), brèche du cercle. Lecture en direct, export SVG/PNG, recette JSON, test de reconnaissance. |
 | **Grimoire** | 58 sceaux canoniques recomposés (Boule de feu, Jet d'eau, Souliers de Sylphe, Brise-mur, Intégration, Porte-pluie, Vent agrippeur, Lit de sable du dragon, Bannière de capture, Effacement de mémoire…) avec effet, chapitre, lanceurs, notes et lecture. |
 | **Dictionnaire** | 79 glyphes : 46 signes (矢), 22 sigils (紋) et 11 sigils décoratifs (装飾紋), avec noms français / anglais / japonais, catégorie (directionnel, semi-directionnel…), effet, effet inversé, rôle de la taille et du nombre, statut officiel, **fidélité du tracé** et les sorts qui les utilisent. |
@@ -49,7 +49,7 @@ Pour redéployer à chaque poussée sur `main`, `.github/workflows/deploy-vps.ym
 ## Tester
 
 ```sh
-npm test                          # node --test : dictionnaire, interpréteur, reconnaissance, hypothèses, étude
+npm test                          # node --test : dictionnaire, interpréteur, reconnaissance, hypothèses, étude, atelier
 npm run eval                      # relevé glyphe par glyphe sur tout le grimoire (rendu propre)
 npm run sloppy                    # lecture de sceaux mal dessinés (8 tirages par sceau)
 npm run sloppy -- 8 --severe      # au niveau de maladresse le plus élevé
@@ -93,13 +93,26 @@ Les 36 tracés `reconstruit` n'ont été confrontés à rien : le wiki ne docume
 
 ## Apprendre
 
-L'onglet **Étudier** traite les 79 glyphes et les 58 sceaux comme 137 cartes.
+### L'atelier — on apprend la magie en la traçant
 
-- **Apprendre** — 23 leçons dans l'ordre où la série présente sa magie : la tétrade primaire, les autres sigils, les signes par catégorie, l'inversion, les sigils décoratifs, puis les sceaux entiers. Chaque leçon montre ses fiches, puis interroge dessus.
-- **Réviser** — répétition espacée (Leitner, sept boîtes) : une carte réussie s'éloigne de 1, 2, 4… jusqu'à 32 jours, une carte ratée redescend d'un cran et revient dans la séance. La progression tient dans le stockage local du navigateur ; elle ne part nulle part.
-- **L'épreuve** — 12, 24 ou 40 questions chronométrées, tirées dans tout le dictionnaire et tout le grimoire, avec des quotas par type pour que deux épreuves se valent. Aucune correction avant la fin, puis la copie détaillée et les leçons à reprendre.
+Six exercices, dans l'ordre où une apprentie les rencontrerait. À chaque fois vous tracez à la souris ou au doigt, et l'application **mesure votre tracé** : il n'y a aucune bonne réponse à cocher.
 
-Sept formes de questions : nommer un glyphe, le reconnaître parmi quatre dessins, en donner l'effet, dire ce que devient cet effet une fois le signe inversé, nommer un sort d'après son sceau, en donner l'effet — et **le tracer**. Cette dernière est corrigée par `classifyGlyph` : le tracé est normalisé et comparé aux gabarits du dictionnaire, sans qu'aucun cercle ne vienne le situer. Un trait honnête mais tremblé passe (99 % des glyphes acceptés sur un tracé penché jusqu'à 18°, d'épaisseur inégale et taché) ; un glyphe étranger, non.
+| Exercice | Ce qui est mesuré |
+| --- | --- |
+| **Le cercle** | ovalisation, tremblement, fermeture, taille — « ovale de 14 %, allongé en largeur : faites tourner le bras depuis l'épaule » |
+| **La brèche** | sa présence, sa largeur, et l'écart en degrés avec l'endroit demandé |
+| **Le sigil au centre** | le bon glyphe, son décalage au centre, sa taille par rapport au rayon |
+| **Placer un signe** | l'angle, la distance au centre, et surtout **le sens** — un signe retourné inverse son effet |
+| **La couronne** | le nombre, la régularité des écarts (« 78°, 95°, 88°, 99° — l'idéal est 90° »), l'égalité des longueurs |
+| **Un sceau entier** | le lecteur du projet lit votre Boule de feu et vous dit ce qu'elle ferait vraiment |
+
+L'ovalisation et le tremblement sont séparés parce qu'ils ne se corrigent pas de la même façon : on ajuste `r(φ) ≈ r0 + c·cos2φ + s·sin2φ` sur l'anneau, le terme en 2φ est l'ovale (le bras), le reste est le tremblement (la main).
+
+### Réviser les noms
+
+Le reste de l'onglet traite les 79 glyphes et les 58 sceaux comme 137 cartes, en **répétition espacée** (Leitner, sept boîtes) : une carte réussie s'éloigne de 1, 2, 4… jusqu'à 32 jours, une carte ratée redescend d'un cran et revient dans la séance. Une **épreuve** chronométrée de 12, 24 ou 40 questions tire dans tout le grimoire, avec des quotas par type pour que deux épreuves se valent.
+
+Sept formes de questions : nommer un glyphe, le reconnaître parmi quatre dessins, en donner l'effet, dire ce que devient cet effet inversé, nommer un sort d'après son sceau, en donner l'effet — et **le tracer**, corrigé par `classifyGlyph`. Un trait honnête mais tremblé passe (99 % des glyphes acceptés sur un tracé penché jusqu'à 18°) ; un glyphe étranger, non.
 
 ## Comment ça marche
 
@@ -118,6 +131,7 @@ src/
                   ré-identifie les tracés ambigus, sonde l'encre là où un glyphe manque
   sloppy.js       rendu « mal dessiné » d'un sceau, pour éprouver la lecture
   study.js        curriculum, questions, révision espacée (Leitner), examen
+  atelier.js      exercices de tracé et leur correction mesurée
   ui/             les six onglets (vanilla JS, aucun framework)
 ```
 
