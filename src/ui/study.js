@@ -12,18 +12,21 @@ import {
   LESSONS, ALL_ITEMS, EXAM_FORMATS, parseItem, itemLabel, typesFor, makeQuestion,
   buildExam, gradeExam, schedule, dueQueue, stats, lessonProgress, judgeDrawing, shuffle,
 } from '../study.js';
+import { EXERCISES, EXERCISE_BY_ID, gradeExercise } from '../atelier.js';
 import { rng } from '../sloppy.js';
 import { h } from './shared.js';
 
 const STORE_KEY = 'grimoire-study';
 const DRAW_SIZE = 340;
+// Un sceau entier a besoin de place : le cercle doit tenir large.
+const PAD_SIZE = 460;
 
 // ───────────────────────── Progression ─────────────────────────
 
 // Le stockage local peut être refusé (navigation privée, réglages) : l'étude
 // doit rester utilisable, seule la mémoire d'une séance à l'autre est perdue.
 function loadStore() {
-  const empty = { v: 1, progress: {}, lessons: {}, exams: [] };
+  const empty = { v: 1, progress: {}, lessons: {}, exams: [], atelier: {} };
   try {
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) return empty;
@@ -74,23 +77,23 @@ function itemBlurb(key) {
 // Le même canevas que l'onglet « Lire », en plus petit : on trace le glyphe
 // demandé et le reconnaisseur juge, sans indulgence mais avec la marge de
 // classifyGlyph — un trait honnête doit passer.
-function drawPad() {
-  const canvas = h('canvas', { width: DRAW_SIZE, height: DRAW_SIZE, class: 'draw-pad' });
+function drawPad(size = DRAW_SIZE) {
+  const canvas = h('canvas', { width: size, height: size, class: 'draw-pad' });
   const cx = canvas.getContext('2d', { willReadFrequently: true });
   let strokes = [];
   let current = null;
 
-  const clear = () => { cx.fillStyle = '#fff'; cx.fillRect(0, 0, DRAW_SIZE, DRAW_SIZE); };
+  const clear = () => { cx.fillStyle = '#fff'; cx.fillRect(0, 0, size, size); };
   const stroke = (s, tail = false) => {
     const p = s.pts;
-    cx.strokeStyle = '#1a0f0a'; cx.lineWidth = 5; cx.lineCap = 'round'; cx.lineJoin = 'round';
+    cx.strokeStyle = '#1a0f0a'; cx.lineWidth = Math.max(4, size / 90); cx.lineCap = 'round'; cx.lineJoin = 'round';
     cx.beginPath();
     if (tail && p.length >= 2) { cx.moveTo(...p[p.length - 2]); cx.lineTo(...p[p.length - 1]); }
     else { cx.moveTo(...p[0]); for (const q of p.slice(1)) cx.lineTo(...q); if (p.length === 1) cx.lineTo(p[0][0] + 0.1, p[0][1]); }
     cx.stroke();
   };
   const redraw = () => { clear(); for (const s of strokes) stroke(s); };
-  const pos = (e) => { const r = canvas.getBoundingClientRect(); return [((e.clientX - r.left) / r.width) * DRAW_SIZE, ((e.clientY - r.top) / r.height) * DRAW_SIZE]; };
+  const pos = (e) => { const r = canvas.getBoundingClientRect(); return [((e.clientX - r.left) / r.width) * size, ((e.clientY - r.top) / r.height) * size]; };
 
   canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.pointerId); current = { pts: [pos(e)] }; strokes.push(current); stroke(current); });
   canvas.addEventListener('pointermove', (e) => { if (!current) return; current.pts.push(pos(e)); stroke(current, true); });
@@ -104,7 +107,7 @@ function drawPad() {
     empty: () => strokes.length === 0,
     undo: () => { strokes.pop(); redraw(); },
     reset: () => { strokes = []; redraw(); },
-    mask: () => maskFromImageData(cx.getImageData(0, 0, DRAW_SIZE, DRAW_SIZE)),
+    mask: () => maskFromImageData(cx.getImageData(0, 0, size, size)),
   };
 }
 
@@ -218,18 +221,19 @@ export function mountStudy(root, ctx) {
     root.replaceChildren();
     toTop();
     if (!storageOk) root.append(h('p', { class: 'notice' }, 'Le stockage local est indisponible : la progression ne sera pas conservée d\'une séance à l\'autre.'));
-    ({ home: homeScreen, lesson: lessonScreen, review: reviewScreen, exam: examScreen })[screen.name]();
+    ({ home: homeScreen, atelier: atelierScreen, exercice: exerciceScreen, lesson: lessonScreen, review: reviewScreen, exam: examScreen })[screen.name]();
   }
 
   // ── accueil ──
   function homeScreen() {
     const st = stats(store.progress, ALL_ITEMS);
     const due = dueQueue(store.progress, Date.now(), { limit: 999, includeNew: false }).length;
+    const doneEx = EXERCISES.filter((e) => store.atelier[e.id]?.passed).length;
 
     root.append(
       h('div', { class: 'card study-hero' },
         h('h2', {}, 'Étudier les sceaux'),
-        h('p', { class: 'lead' }, 'Apprenez les glyphes un groupe à la fois, révisez ce qui s\'efface, puis passez l\'épreuve. Les questions de tracé sont corrigées par le lecteur du projet, pas à l\'honneur.'),
+        h('p', { class: 'lead' }, 'On apprend la magie en la traçant. L\'atelier vous fait dessiner — le cercle d\'abord, le sceau entier à la fin — et mesure ce que vous avez tracé. Le dictionnaire et l\'épreuve sont là pour réviser les noms.'),
         bar(st.seen / Math.max(1, st.total)),
         h('div', { class: 'study-stats' },
           h('div', {}, h('b', {}, st.total), 'cartes'),
@@ -238,9 +242,10 @@ export function mountStudy(root, ctx) {
           h('div', {}, h('b', {}, st.mastered), 'acquises'),
         ),
         h('div', { class: 'btn-row study-actions' },
-          h('button', { class: 'btn primary', onClick: () => go({ name: 'lesson', pick: true }) }, '📖 Apprendre'),
+          h('button', { class: 'btn primary', onClick: () => go({ name: 'atelier' }) }, `🖌 L'atelier${doneEx ? ` (${doneEx}/${EXERCISES.length})` : ''}`),
+          h('button', { class: 'btn', onClick: () => go({ name: 'lesson', pick: true }) }, '📖 Le dictionnaire'),
           h('button', { class: 'btn', onClick: () => go({ name: 'review' }) }, `🔁 Réviser${due ? ` (${due})` : ''}`),
-          h('button', { class: 'btn', onClick: () => go({ name: 'exam' }) }, '🎓 Passer l\'épreuve'),
+          h('button', { class: 'btn', onClick: () => go({ name: 'exam' }) }, '🎓 L\'épreuve'),
         ),
       ),
     );
@@ -269,6 +274,92 @@ export function mountStudy(root, ctx) {
       ));
     }
     root.append(h('div', { class: 'section-title' }, h('h2', {}, 'Leçons'), h('span', { class: 'muted' }, `${LESSONS.length}`)), list);
+  }
+
+  // ── l'atelier : la progression par le tracé ──
+  function atelierScreen() {
+    const done = (id) => store.atelier[id]?.passed;
+    root.append(
+      h('div', { class: 'btn-row' }, h('button', { class: 'btn small', onClick: () => go({ name: 'home' }) }, '← Retour')),
+      h('div', { class: 'card' },
+        h('h2', {}, 'L\'atelier'),
+        h('p', { class: 'lead' }, 'Six exercices, du premier cercle au sceau entier. Vous tracez, il mesure : rien à cocher, rien à deviner.'),
+        bar(EXERCISES.filter((e) => done(e.id)).length / EXERCISES.length),
+      ),
+    );
+    const list = h('div', { class: 'lesson-list' });
+    EXERCISES.forEach((ex, i) => {
+      const st = store.atelier[ex.id];
+      list.append(h('button', { class: `lesson-row${done(ex.id) ? ' done' : ''}`, onClick: () => go({ name: 'exercice', id: ex.id }) },
+        h('span', { class: 'ex-num' }, i + 1),
+        h('div', { class: 'lesson-body' },
+          h('h3', {}, ex.title),
+          h('div', { class: 'muted' }, ex.brief),
+        ),
+        done(ex.id) ? h('span', { class: 'badge ok' }, 'réussi') : st ? h('span', { class: 'badge warn' }, 'essayé') : null,
+      ));
+    });
+    root.append(list);
+  }
+
+  function exerciceScreen() {
+    const ex = EXERCISE_BY_ID[screen.id] ?? EXERCISES[0];
+    const idx = EXERCISES.indexOf(ex);
+    const pad = drawPad(PAD_SIZE);
+    const verdict = h('div');
+
+    const validate = h('button', { class: 'btn primary' }, 'Corriger mon tracé');
+    validate.addEventListener('click', () => {
+      if (pad.empty()) { verdict.replaceChildren(h('p', { class: 'notice' }, 'La feuille est vide : tracez d\'abord.')); return; }
+      validate.disabled = true;
+      validate.textContent = 'Mesure…';
+      // Laisser le navigateur peindre avant de bloquer sur la reconnaissance.
+      requestAnimationFrame(() => setTimeout(() => {
+        const res = gradeExercise(ex, pad.mask());
+        validate.disabled = false;
+        validate.textContent = 'Corriger à nouveau';
+        const prev = store.atelier[ex.id] ?? {};
+        store.atelier[ex.id] = { passed: prev.passed || res.passed, best: Math.max(prev.best ?? 0, res.score), at: Date.now() };
+        commit();
+
+        const rows = h('div', { class: 'crit-list' }, ...res.criteria.map((c) => h('div', { class: `crit ${c.ok ? 'ok' : 'ko'}${c.essential ? '' : ' minor'}` },
+          h('span', { class: 'mark' }, c.ok ? '✓' : '✗'),
+          h('div', {}, h('b', {}, c.label), h('div', { class: 'muted' }, c.detail)),
+        )));
+        const next = EXERCISES[idx + 1];
+        verdict.replaceChildren(h('div', { class: 'card result' },
+          h('h2', {}, res.passed ? 'C\'est juste.' : 'Pas encore.'),
+          bar(res.score),
+          rows,
+          // Le dernier exercice se corrige comme une vraie lecture : autant la montrer.
+          res.reading ? h('div', { class: 'card', style: { marginTop: '0.8rem' } }, h('h3', {}, 'Ce que votre sceau ferait'), ...res.reading.paragraphs.slice(0, 3).map((t) => h('p', {}, t))) : null,
+          h('div', { class: 'btn-row study-actions' },
+            res.passed && next ? h('button', { class: 'btn primary', onClick: () => go({ name: 'exercice', id: next.id }) }, `Suivant : ${next.title}`) : null,
+            h('button', { class: 'btn', onClick: () => { pad.reset(); verdict.replaceChildren(); } }, 'Recommencer'),
+            h('button', { class: 'btn', onClick: () => go({ name: 'atelier' }) }, 'Tous les exercices'),
+          ),
+        ));
+        verdict.scrollIntoView({ block: 'nearest' });
+      }, 0));
+    });
+
+    root.append(
+      h('div', { class: 'btn-row' }, h('button', { class: 'btn small', onClick: () => go({ name: 'atelier' }) }, '← L\'atelier')),
+      h('div', { class: 'card' },
+        h('div', { class: 'session-head' }, h('span', { class: 'muted' }, `Exercice ${idx + 1} / ${EXERCISES.length}`), store.atelier[ex.id]?.passed ? h('span', { class: 'badge ok' }, 'déjà réussi') : null),
+        h('h2', {}, ex.title),
+        h('p', { class: 'lead' }, ex.brief),
+        ex.tip ? h('p', { class: 'q-explain' }, ex.tip) : null,
+        h('div', { class: 'pad-wrap' }, pad.canvas),
+        h('div', { class: 'btn-row' },
+          validate,
+          h('button', { class: 'btn small', onClick: () => pad.undo() }, '↶ Annuler'),
+          h('button', { class: 'btn small', onClick: () => { pad.reset(); verdict.replaceChildren(); } }, 'Effacer'),
+        ),
+        ex.why ? h('p', { class: 'muted', style: { marginTop: '0.8rem' } }, h('b', {}, 'Pourquoi : '), ex.why) : null,
+      ),
+      verdict,
+    );
   }
 
   // ── leçon : d'abord les fiches, ensuite l'exercice ──

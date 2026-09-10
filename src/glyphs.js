@@ -51,7 +51,7 @@ const SIGNS = {
     inverted: 'inversé, probablement l\'effet contraire (étalement) — non observé',
     size: null, count: null,
     hint: 'Une des pointes du triangle regarde le centre.',
-    shape: S([line(22, 26, 78, 26, 50, 76, 22, 26)]),
+    shape: S([line(50, 24, 78, 74, 22, 74, 50, 24)]),
   },
   dancing_puppets: {
     fr: 'Signe des Marionnettes dansantes', en: 'Sign of Dancing Puppets', jp: '踊る人形の矢', romaji: 'Odoru Ningyō no Ya',
@@ -83,7 +83,7 @@ const SIGNS = {
     count: null,
     tilt: 'incliné, il attire en vrillant (tourbillon) ; à 90° il ne ferait que tordre',
     hint: 'Flèche double vers le centre, étrier côté cercle (Vent agrippeur).',
-    shape: S([line(34, 86, 34, 78, 66, 78, 66, 86), line(50, 86, 50, 18), line(34, 34, 50, 18, 66, 34), line(34, 52, 50, 36, 66, 52)]),
+    shape: S([line(50, 90, 50, 30), line(28, 52, 50, 22, 72, 52, 28, 52), line(26, 80, 50, 50, 74, 80)]),
   },
   stretch: {
     fr: 'Signe d\'Étirement', en: 'Sign of Stretch',
@@ -111,9 +111,7 @@ const SIGNS = {
     inverted: null, size: null, count: null,
     hint: 'Cercle traversé d\'un trait, œil au centre (Ombre empruntée, Cape de Sasaran).',
     shape: S([
-      circle(50, 50, 30),
-      join(bezier([26, 50], [38, 34], [62, 34], [74, 50]), bezier([74, 50], [62, 66], [38, 66], [26, 50])),
-      line(8, 30, 26, 50), line(74, 50, 92, 70),
+      join(bezier([14, 50], [34, 24], [66, 24], [86, 50]), bezier([86, 50], [66, 76], [34, 76], [14, 50])),
     ], [[50, 50, 4]]),
   },
   reflection: {
@@ -154,7 +152,7 @@ const SIGNS = {
     effect: 'maintient la cible en équilibre sur un plan horizontal, comme un objet qui flotte sur l\'eau',
     inverted: null, size: null, count: null,
     hint: 'Deux ondulations verticales (versions à 2 ou 3 traits sans différence connue).',
-    shape: S([sCurve(40, 50, 52, 7), sCurve(60, 50, 52, 7)]),
+    shape: S([sCurve(30, 50, 54, 7), sCurve(50, 50, 54, 7), sCurve(70, 50, 54, 7)]),
   },
   wind_sign: {
     fr: 'Signe du Vent (Vent tourbillonnant)', en: 'Sign of Wind / Spiraling Wind', jp: '風の矢・風を巻く矢', romaji: 'Kaze no Ya',
@@ -211,7 +209,7 @@ const SIGNS = {
     effect: 'fonction inconnue (perception d\'une présence ?)',
     inverted: null, size: null, count: null,
     hint: 'Trois traits verticaux de longueur croissante (Sentier de pierres luisantes).',
-    shape: S([line(32, 40, 32, 60), line(50, 32, 50, 68), line(68, 22, 68, 78)]),
+    shape: S([line(50, 10, 50, 90), line(10, 50, 90, 50), line(22, 22, 78, 78), line(78, 22, 22, 78)]),
   },
   partition: {
     fr: 'Signe de Partition', en: 'Sign of Partition', jp: '境界の矢', romaji: 'Kyōkai no Ya',
@@ -346,7 +344,12 @@ const SIGNS = {
     inverted: 'angles vers l\'intérieur : rétrécit la cible (Sort de Réduction)',
     size: null, count: null,
     hint: 'Équerre double ; on en place quatre aux diagonales, angle vers le cercle pour agrandir, vers le centre pour rétrécir.',
-    shape: S([line(22, 42, 50, 70, 78, 42), line(30, 30, 50, 50, 70, 30)]),
+    shape: S([
+      line(12, 42, 12, 12, 42, 12), line(22, 42, 22, 22, 42, 22),
+      line(88, 42, 88, 12, 58, 12), line(78, 42, 78, 22, 58, 22),
+      line(12, 58, 12, 88, 42, 88), line(22, 58, 22, 78, 42, 78),
+      line(88, 58, 88, 88, 58, 88), line(78, 58, 78, 78, 58, 78),
+    ]),
   },
   crosshair: {
     fr: 'Signe de Réticule', en: 'Sign of Crosshair', unofficial: true,
@@ -354,7 +357,7 @@ const SIGNS = {
     effect: 'fait viser au sort ce que désignent ses bras courts',
     inverted: null, size: null, count: null,
     hint: 'Croix à bras inégaux (Chasse-pluie, Lance-eau).',
-    shape: S([line(50, 12, 50, 88), line(36, 44, 64, 44)]),
+    shape: S([line(50, 16, 50, 84), line(16, 50, 84, 50)]),
   },
   rain: {
     fr: 'Signe de Pluie', en: 'Sign of Rain', unofficial: true,
@@ -410,7 +413,7 @@ const SIGNS = {
     effect: 'projette vers l\'extérieur l\'image définie par le sort',
     inverted: null, size: null, count: null,
     hint: 'Étrier ouvert (Sort-miroir).',
-    shape: S([line(22, 64, 22, 40, 78, 40, 78, 64)]),
+    shape: S([line(78, 14, 54, 38, 54, 74, 26, 90)]),
   },
   launch: {
     fr: 'Signe de Jaillissement', en: 'Sign of Launch', unofficial: true,
@@ -449,11 +452,16 @@ const windS = (cx, cy, s) => join(
 );
 
 // S de l'eau : hameçons aux extrémités.
-const waterS = (cx, cy, s) => join(
-  bezier([cx + 4 * s, cy - 36 * s], [cx + 16 * s, cy - 36 * s], [cx + 16 * s, cy - 22 * s], [cx + 8 * s, cy - 22 * s]),
-  bezier([cx + 8 * s, cy - 22 * s], [cx - 22 * s, cy - 22 * s], [cx + 22 * s, cy + 22 * s], [cx - 8 * s, cy + 22 * s]),
-  bezier([cx - 8 * s, cy + 22 * s], [cx - 16 * s, cy + 22 * s], [cx - 16 * s, cy + 36 * s], [cx - 4 * s, cy + 36 * s]),
-);
+const waterS = (cx, cy, s) => sCurve(cx, cy, 64 * s, 13 * s);
+
+// Goutte fermée : pointe en haut, panse en bas (retournée si flip).
+const teardrop = (cx, cy, r, flip = false) => {
+  const k = flip ? -1 : 1;
+  return join(
+    bezier([cx, cy - k * r * 1.7], [cx + r * 0.95, cy - k * r * 0.4], [cx + r, cy + k * r * 0.55], [cx, cy + k * r]),
+    bezier([cx, cy + k * r], [cx - r, cy + k * r * 0.55], [cx - r * 0.95, cy - k * r * 0.4], [cx, cy - k * r * 1.7]),
+  );
+};
 
 const SIGILS = {
   fire: {
@@ -475,7 +483,7 @@ const SIGILS = {
     official: true, descOfficial: true,
     effect: 'manipule, recueille et crée l\'eau',
     hint: 'Les sorts d\'eau durables recueillent l\'eau plutôt que de la créer (coût moindre).',
-    shape: S([waterS(50, 50, 1), drop(20, 44, 12), drop(80, 56, 12)]),
+    shape: S([waterS(50, 50, 1), teardrop(20, 42, 11), teardrop(80, 58, 11, true)]),
   },
   earth: {
     fr: 'Sigil de Terre', en: 'Sigil of Earth', jp: '地の紋', romaji: 'Chi no Mon', alt: ['Sigil de Force', 'Sigil de Sol'], element: 'terre', tetrad: true,
@@ -523,12 +531,12 @@ const SIGILS = {
     fr: 'Sigil de Répétition', en: 'Sigil of Repetition', jp: 'くり返しの紋', romaji: 'Kurikaeshi no Mon', element: 'temps',
     official: true, descOfficial: true,
     effect: 'ramène sans cesse la cible à l\'état (forme et température) qu\'elle avait quand le sort l\'a saisie — répare, conserve, rend élastique',
-    hint: 'Œil dans un cercle, aux paupières prolongées en S. Tour à tour appelé signe, sceau puis sigil.',
+    hint: 'Spirale enfermée dans un cercle, barrée d\'une oblique. Tour à tour appelé signe, sceau puis sigil.',
     shape: S([
       circle(50, 50, 30),
-      join(line(8, 38, 20, 50), bezier([20, 50], [32, 34], [68, 34], [80, 50]), line(80, 50, 92, 62)),
-      bezier([20, 50], [32, 66], [68, 66], [80, 50]),
-    ], [[50, 50, 4]]),
+      spiral(52, 52, 3, 20, 200, 560, 30),
+      line(14, 30, 86, 66),
+    ], [[52, 52, 3.5]]),
   },
   guidance: {
     fr: 'Sigil de Guidage', en: 'Sigil of Guidance', jp: '誘導の紋', romaji: 'Yūdō no Mon', element: 'guidage',
@@ -623,8 +631,8 @@ const SIGILS = {
     fr: 'Sigil de Foudre', en: 'Sigil of Lightning', element: 'foudre', unofficial: true,
     official: false, descOfficial: false,
     effect: 'crée et manipule probablement l\'électricité',
-    hint: 'Éclair en zigzag (sorts d\'Iguin et d\'Engendale).',
-    shape: S([line(72, 8, 28, 40, 62, 40, 24, 70, 58, 70, 22, 94)]),
+    hint: 'Tige portant un losange en son milieu (sorts d\'Iguin et d\'Engendale).',
+    shape: S([line(50, 8, 50, 92), line(50, 34, 64, 50, 50, 66, 36, 50, 50, 34)]),
   },
   unburning_flame: {
     fr: 'Sigil de Flamme sans brûlure', en: 'Sigil of Unburning Flames', element: 'feu', variantOf: 'fire', unofficial: true,
@@ -750,12 +758,13 @@ const SHAPE_CONFORME = [
   'fire', 'light', 'water', 'earth', 'wind', 'aeriforms', 'wind_underfoot', 'crystalize',
   'columns', 'dispersion', 'levitation', 'convergence', 'crushing', 'billow', 'rain',
   'diamond', 'crosshair', 'dancing_puppets', 'stretch', 'binding', 'regions', 'stability',
+  'pulling', 'expansion', 'detection', 'concealment', 'repetition', 'lightning',
+  'projection', 'collection',
 ];
 // Un relevé existe et mon dessin ne lui correspond pas encore : c'est dit, et le
 // glyphe est écarté des exercices de tracé.
 const SHAPE_ECART = [
-  'expansion', 'windows', 'pulling', 'collection', 'lightning',
-  'detection', 'concealment', 'repetition', 'projection', 'deco_bird', 'deco_horse',
+  'windows', 'deco_bird', 'deco_horse',
   // Le relevé du Signe des Fenêtres est le dessin que porte aujourd'hui la
   // Sélection : les deux sont donc suspects tant que l'un des deux n'est pas
   // établi. Corriger la Lumière n'y a rien changé — elle reste à 0,26 de la

@@ -324,3 +324,17 @@ input[type="range"] { accent-color: var(--seal); width: 100%; }
   .chip:hover { border-color: var(--line); color: inherit; }
   .tabs a:hover:not(.active) { background: none; color: var(--ink-2); }
 }
+
+/* ── L'atelier ── */
+.ex-num { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--paper-3); color: var(--ink-2); font-family: var(--font-sans); font-size: 0.85rem; flex: none; }
+.lesson-row.done .ex-num { background: var(--ok); color: #fff; }
+.crit-list { display: grid; gap: 0.4rem; margin: 0.8rem 0; }
+.crit { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.6rem; align-items: start; padding: 0.5rem 0.7rem; border: 1px solid var(--line); border-left-width: 4px; border-radius: 10px; background: var(--paper); font-family: var(--font-sans); font-size: 0.86rem; }
+.crit.ok { border-left-color: var(--ok); }
+.crit.ko { border-left-color: var(--seal); }
+.crit.minor { opacity: 0.75; }
+.crit .mark { font-weight: 700; }
+.crit.ok .mark { color: var(--ok); }
+.crit.ko .mark { color: var(--seal); }
+.crit .muted { font-size: 0.82rem; }
+.pad-wrap .draw-pad { cursor: crosshair; }
