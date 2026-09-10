@@ -60,7 +60,7 @@ node scripts/sloppy-eval.mjs 3 pyreball --png   # détail d'un sceau, images dan
 
 | Épreuve | Sorts identifiés | Glyphes relevés |
 | --- | --- | --- |
-| Rendu propre | 58/58 | 413/561 (74 %), 46 sceaux relevés glyphe pour glyphe |
+| Rendu propre | 58/58 | 413/561 (74 %), 44 sceaux relevés glyphe pour glyphe |
 | Tracé d'une main hésitante (8 tirages × 58 sceaux) | **452/464 (97 %)** | 3 956/4 488 (88 %) |
 | Tracé franchement mal dessiné | **435/464 (94 %)** | 3 774/4 488 (84 %) |
 
@@ -76,16 +76,20 @@ Ce qui résiste encore, sur une main hésitante : le Pare-pluie surtout — son 
 
 | État | Sens | Nombre |
 | --- | --- | --- |
-| `conforme` | confronté à un relevé de la série, et conforme | 22 |
-| `ecart` | confronté à un relevé, et **différent** — le dessin est à refaire | 12 |
+| `conforme` | confronté à un relevé de la série, et conforme | 30 |
+| `ecart` | confronté à un relevé, et **différent** — le dessin est à refaire | 4 |
 | `reconstruit` | dessiné d'après une description, jamais confronté à un relevé | 36 |
 | `simplifie` | volontairement simplifié (les sigils décoratifs, très ornés) | 9 |
 
 L'état est affiché sur la fiche du Dictionnaire et sur les fiches de leçon, avec la réserve écrite en toutes lettres. Et **seuls les glyphes `conforme` sont proposés au tracé** dans l'épreuve : faire recopier une approximation n'apprend rien et sanctionne à tort.
 
-Sept tracés ont été refaits après confrontation aux relevés : le Feu (sommet ouvert, ailerons sortants, pas de chevrons intérieurs), la Lumière (un cercle parasite en trop), l'Eau (gouttes franches), la Terre (pointe ouverte, sans socle), le Vent et les Gaz (vraies volutes), le Vent sous les pieds (nœud de volutes, et non un S en capsule) et la Convergence (le triangle pointe vers le bas). La correction a fait progresser la lecture d'un rendu propre — 46 sceaux relevés glyphe pour glyphe contre 44 — et **reculer** légèrement celle d'un tracé franchement mal dessiné, de 95 % à 94 %. C'est logique et assumé : mes anciens dessins inventés étaient plus faciles à distinguer les uns des autres que les vrais, qui se ressemblent davantage. La fidélité à l'œuvre passe avant le score du banc d'essai.
+Seize tracés ont été refaits après confrontation aux relevés, en deux passes. Les sigils d'abord : le Feu (sommet ouvert, ailerons sortants — les chevrons intérieurs n'existent pas), la Lumière (un cercle parasite en trop), l'Eau (vraies gouttes et S fluide), la Terre (pointe ouverte, sans socle), le Vent et les Gaz (volutes franches), le Vent sous les pieds (nœud de volutes, et non un S en capsule). Les signes ensuite : l'Expansion (quatre équerres doubles, et non un double chevron), la Détection (astérisque à huit branches), la Dissimulation (œil nu — la barre qui la rendait indiscernable de la Répétition n'existe pas), la Répétition (spirale barrée d'une oblique), la Foudre (une tige portant un losange, pas un éclair en zigzag), l'Attraction, la Projection, la Stabilité (trois ondulations), le Réticule (croix symétrique) et la Cueillette.
 
-Les douze `ecart` restants sont nommés dans `src/glyphs.js` et attendent d'être redessinés. Le cas le plus gênant reste le Signe des Fenêtres : son relevé correspond au dessin que porte aujourd'hui le Signe de Sélection. Les démêler demande de savoir ce qu'est vraiment la Sélection, ce que je n'ai pas — les deux sont donc marqués `ecart`. Retirer le cercle parasite de la Lumière n'a d'ailleurs pas suffi à la séparer de la Sélection : elles restent à 0,26 l'une de l'autre, c'est-à-dire presque confondues.
+**Une orientation n'est pas une forme.** Les relevés du wiki sont des icônes isolées : elles n'ont pas d'orientation de sceau. J'ai d'abord retourné la Convergence d'après son icône, puis annulé — dans un sceau, une pointe du triangle regarde le centre, et c'est la convention du dépôt qui fait foi. Seules les *formes* ont été corrigées d'après les relevés, jamais les orientations. Ces corrections **coûtent** à la reconnaissance, et c'est assumé : mes dessins inventés se distinguaient mieux les uns des autres que les vrais, qui se ressemblent davantage. Le Réticule en est l'exemple net — une croix symétrique, fidèle, est bien plus facile à confondre que la dague dissymétrique que j'avais dessinée. La fidélité à l'œuvre passe avant le score du banc d'essai. En échange, une vraie confusion a disparu : la Dissimulation et la Répétition, que je dessinais presque identiques (0,22), sont maintenant nettement distinctes.
+
+Quatre `ecart` restent, nommés dans `src/glyphs.js`. Le cas irréductible est le Signe des Fenêtres : son relevé correspond au dessin que porte aujourd'hui le Signe de Sélection, et les démêler demande de savoir ce qu'est vraiment la Sélection — le wiki ne documente aucun signe de ce nom. Les deux restent donc en l'état plutôt que corrigés au jugé. Retirer le cercle parasite de la Lumière n'a d'ailleurs pas suffi à la séparer de la Sélection : elles restent à 0,26 l'une de l'autre, presque confondues.
+
+Les 36 tracés `reconstruit` n'ont été confrontés à rien : le wiki ne documente que 33 symboles, et c'est tout ce que j'ai pu vérifier.
 
 ## Apprendre
 
