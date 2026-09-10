@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GLYPHS } from '../src/glyphs.js';
+import { GLYPHS, FIDELITY_LABEL } from '../src/glyphs.js';
 import { SPELL_BY_ID } from '../src/spells.js';
 import { rasterizeGlyph } from '../src/seal.js';
 import { classifyGlyph } from '../src/recognizer.js';
@@ -34,6 +34,24 @@ test('chaque question a une réponse et une seule', () => {
       // Deux choix au libellé identique rendraient la question insoluble.
       assert.equal(new Set(q.choices.map((c) => c.label)).size, q.choices.length, `${key}/${type} : libellés en double`);
     }
+  }
+});
+
+// Le dictionnaire distingue le nom (officiel ou non) du tracé (conforme au
+// relevé ou non). Faire recopier un tracé approximatif n'apprend rien : la
+// question de tracé ne doit porter que sur ce dont la forme est sûre.
+test('seuls les glyphes au tracé conforme sont proposés au tracé', () => {
+  for (const id of Object.keys(GLYPHS)) {
+    const types = typesFor(`glyph:${id}`);
+    const draws = types.includes('glyph-draw');
+    assert.equal(draws, GLYPHS[id].shapeRef === 'conforme', `${GLYPHS[id].fr} (${GLYPHS[id].shapeRef}) : tracé ${draws ? 'proposé' : 'écarté'}`);
+    assert.ok(FIDELITY_LABEL[GLYPHS[id].shapeRef], `${id} : fidélité non étiquetée`);
+  }
+  // Une épreuve entière ne doit contenir aucune question de tracé douteuse.
+  const exam = buildExam({ seed: 5, format: 'long' });
+  for (const q of exam.questions) {
+    if (q.type !== 'glyph-draw') continue;
+    assert.equal(GLYPHS[q.target].shapeRef, 'conforme', `${q.target} demandé au tracé`);
   }
 });
 

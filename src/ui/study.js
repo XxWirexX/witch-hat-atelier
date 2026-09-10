@@ -4,7 +4,7 @@
 // src/study.js. Ce fichier ne fait que la mettre à l'écran et garder la
 // progression dans le navigateur.
 
-import { GLYPHS } from '../glyphs.js';
+import { GLYPHS, FIDELITY_LABEL } from '../glyphs.js';
 import { SPELL_BY_ID } from '../spells.js';
 import { glyphSVG, sealSVG } from '../seal.js';
 import { maskFromImageData, classifyGlyph } from '../recognizer.js';
@@ -58,10 +58,15 @@ function itemBlurb(key) {
   const { kind, id } = parseItem(key);
   if (kind === 'glyph') {
     const g = GLYPHS[id];
-    return { title: g.fr, sub: [g.en, g.jp].filter(Boolean).join(' · '), text: g.effect.charAt(0).toUpperCase() + g.effect.slice(1) + '.', extra: g.inverted ? `Inversé : ${g.inverted}.` : null };
+    return {
+      title: g.fr, sub: [g.en, g.jp].filter(Boolean).join(' · '),
+      text: g.effect.charAt(0).toUpperCase() + g.effect.slice(1) + '.',
+      extra: g.inverted ? `Inversé : ${g.inverted}.` : null,
+      caveat: g.shapeRef === 'conforme' ? null : FIDELITY_LABEL[g.shapeRef],
+    };
   }
   const sp = SPELL_BY_ID[id];
-  return { title: sp.fr, sub: [sp.en, sp.jp].filter(Boolean).join(' · '), text: sp.effect, extra: null };
+  return { title: sp.fr, sub: [sp.en, sp.jp].filter(Boolean).join(' · '), text: sp.effect, extra: null, caveat: null };
 }
 
 // ───────────────────────── Zone de tracé ─────────────────────────
@@ -290,6 +295,7 @@ export function mountStudy(root, ctx) {
             b.sub ? h('div', { class: 'names' }, b.sub) : null,
             h('p', {}, b.text),
             b.extra ? h('p', { class: 'muted' }, b.extra) : null,
+            b.caveat ? h('p', { class: 'notice' }, b.caveat) : null,
             h('button', { class: 'btn small', onClick: () => ctx.goto(kind === 'glyph' ? 'dictionnaire' : 'grimoire', kind === 'glyph' ? { glyph: id } : { spell: id }) }, 'Fiche complète'),
           ),
         ));
