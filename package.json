@@ -1,13 +1,15 @@
 {
   "name": "grimoire-witch-hat-atelier",
   "version": "1.0.0",
-  "description": "Lecteur, compositeur et dictionnaire des sceaux magiques de Witch Hat Atelier (L'Atelier des Sorciers). Sans dépendance, tout dans le navigateur.",
+  "description": "Lecteur, compositeur, dictionnaire et cours des sceaux magiques de Witch Hat Atelier (L'Atelier des Sorciers). Sans dépendance, tout dans le navigateur.",
   "type": "module",
   "private": true,
   "scripts": {
     "start": "python3 -m http.server 8080",
     "test": "node --test test/*.test.js",
-    "eval": "node scripts/evaluate.mjs"
+    "eval": "node scripts/evaluate.mjs",
+    "sloppy": "node scripts/sloppy-eval.mjs",
+    "icons": "node scripts/make-icons.mjs"
   },
   "license": "MIT",
   "engines": {

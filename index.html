@@ -7,6 +7,13 @@
   <meta name="description" content="Lit, compose et explique les sceaux magiques de L'Atelier des Sorciers (Witch Hat Atelier) : sigils, signes, cercle, équilibre.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='42' fill='none' stroke='%236b1a1a' stroke-width='6'/%3E%3Cpath d='M50 22 L78 72 L22 72 Z M50 22 V88' fill='none' stroke='%236b1a1a' stroke-width='5' stroke-linejoin='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f5eddc">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1b1714">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Grimoire">
+  <meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
   <header class="topbar">
@@ -16,6 +23,7 @@
     </a>
     <nav class="tabs" role="tablist">
       <a href="#lire" data-tab="lire" role="tab">Lire</a>
+      <a href="#etudier" data-tab="etudier" role="tab">Étudier</a>
       <a href="#composer" data-tab="composer" role="tab">Composer</a>
       <a href="#grimoire" data-tab="grimoire" role="tab">Grimoire</a>
       <a href="#dictionnaire" data-tab="dictionnaire" role="tab">Dictionnaire</a>
@@ -26,6 +34,7 @@
 
   <main id="main">
     <section id="tab-lire" class="tab" hidden></section>
+    <section id="tab-etudier" class="tab" hidden></section>
     <section id="tab-composer" class="tab" hidden></section>
     <section id="tab-grimoire" class="tab" hidden></section>
     <section id="tab-dictionnaire" class="tab" hidden></section>

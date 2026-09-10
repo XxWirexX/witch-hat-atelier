@@ -67,4 +67,9 @@ export function mountGrimoire(root, ctx) {
   typeSel.addEventListener('change', render);
   render();
   ctx.bus.addEventListener('open:grimoire', (e) => { const sp = SPELLS.find((s) => s.id === e.detail?.spell); if (sp) openDrawer(spellDetail(sp, ctx)); });
+  const pending = sessionStorage.getItem('grimoire-open-grimoire');
+  if (pending) {
+    sessionStorage.removeItem('grimoire-open-grimoire');
+    try { const sp = SPELLS.find((s) => s.id === JSON.parse(pending).spell); if (sp) openDrawer(spellDetail(sp, ctx)); } catch { /* ignore */ }
+  }
 }

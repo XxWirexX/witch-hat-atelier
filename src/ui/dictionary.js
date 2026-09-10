@@ -88,5 +88,8 @@ export function mountDictionary(root, ctx) {
   render();
   ctx.bus.addEventListener('open:dictionnaire', (e) => { if (e.detail?.glyph && GLYPHS[e.detail.glyph]) openDrawer(glyphDetail(e.detail.glyph, ctx)); });
   const pending = sessionStorage.getItem('grimoire-open-dictionnaire');
-  if (pending) { sessionStorage.removeItem('grimoire-open-dictionnaire'); }
+  if (pending) {
+    sessionStorage.removeItem('grimoire-open-dictionnaire');
+    try { const { glyph } = JSON.parse(pending); if (GLYPHS[glyph]) openDrawer(glyphDetail(glyph, ctx)); } catch { /* ignore */ }
+  }
 }

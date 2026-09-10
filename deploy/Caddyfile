@@ -1,0 +1,38 @@
+# Grimoire — hébergement statique avec Caddy (HTTPS automatique).
+#
+#   sudo cp deploy/Caddyfile /etc/caddy/Caddyfile   # après avoir mis ton domaine
+#   sudo systemctl reload caddy
+#
+# Remplace grimoire.exemple.fr par ton domaine (son A/AAAA doit pointer sur le VPS).
+
+grimoire.exemple.fr {
+	root * /var/www/grimoire
+	encode zstd gzip
+	file_server
+
+	# Les modules ES exigent le bon type MIME, sinon le navigateur refuse de les charger.
+	@js path *.js
+	header @js Content-Type "text/javascript; charset=utf-8"
+
+	# Le code change à chaque déploiement : on le revalide, on ne le fige pas.
+	@manifest path *.webmanifest
+	header @manifest Content-Type "application/manifest+json; charset=utf-8"
+
+	# Le service worker décide de tout le reste : il ne doit jamais être figé.
+	header /sw.js Cache-Control "no-cache"
+	header /*.webmanifest Cache-Control "no-cache"
+	header /*.js Cache-Control "no-cache"
+	header /*.css Cache-Control "no-cache"
+	header /index.html Cache-Control "no-cache"
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		# Tout tourne en local : aucune requête sortante n'est nécessaire.
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'"
+	}
+
+	log {
+		output file /var/log/caddy/grimoire.log
+	}
+}

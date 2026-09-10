@@ -163,22 +163,23 @@ export function signature(seal) {
   return sig;
 }
 
+// Similarité de Dice pondérée entre deux compositions : un sceau dont il manque
+// un signe reste proche de son modèle, un sceau qui en ajoute s'en éloigne.
 export function matchSpell(seal, exclude = null) {
   const a = signature(seal);
   const results = [];
+  const w = (k) => (GLYPHS[k.split('|')[0]]?.kind === 'sign' ? 1 : 2.5);
   for (const sp of SPELLS) {
     if (exclude && sp.id === exclude) continue;
     const b = signature(sp.seal);
     if (a.size === 0 && b.size === 0) { results.push({ spell: sp, score: 1 }); continue; }
-    let inter = 0, union = 0;
-    const keys = new Set([...a.keys(), ...b.keys()]);
-    for (const k of keys) {
-      const w = GLYPHS[k.split('|')[0]].kind === 'sign' ? 1 : 2.5;
+    let inter = 0, total = 0;
+    for (const k of new Set([...a.keys(), ...b.keys()])) {
       const x = a.get(k) || 0, y = b.get(k) || 0;
-      inter += w * Math.min(x, y) / Math.max(x, y);
-      union += w;
+      inter += w(k) * Math.min(x, y);
+      total += w(k) * (x + y);
     }
-    results.push({ spell: sp, score: union ? inter / union : 0 });
+    results.push({ spell: sp, score: total ? (2 * inter) / total : 0 });
   }
   results.sort((x, y) => y.score - x.score);
   return { best: results[0] || null, candidates: results.slice(0, 4) };
@@ -199,7 +200,11 @@ export function readSeal(seal, opts = {}) {
 
   const m = A.match.best;
   let title = type, matchLine = null;
-  if (m && m.score >= 0.999 && !(opts.excludeMatch && m.spell.id === opts.excludeMatch)) {
+  if (opts.match) {
+    // identification fournie par la lecture par hypothèses : elle fait autorité
+    matchLine = { ...opts.match };
+    if (matchLine.kind !== 'related') title = matchLine.spell.fr;
+  } else if (m && m.score >= 0.999 && !(opts.excludeMatch && m.spell.id === opts.excludeMatch)) {
     title = `${m.spell.fr}`; matchLine = { kind: 'exact', spell: m.spell, score: m.score };
   } else if (m && m.score >= 0.6) {
     matchLine = { kind: 'close', spell: m.spell, score: m.score };
@@ -298,16 +303,27 @@ export function readSeal(seal, opts = {}) {
   if (matchLine) {
     const sp = matchLine.spell;
     const label = `${sp.fr}${sp.en ? ` (${sp.en}` + (sp.jp ? `, ${sp.jp}` : '') + ')' : ''}`;
+    const corrected = opts.match?.corrections?.length;
     if (matchLine.kind === 'exact') parts.push(`Sceau connu du grimoire : ${label} — ${sp.effect}`);
-    else if (matchLine.kind === 'close') parts.push(`Très proche de « ${sp.fr} » (${Math.round(matchLine.score * 100)} % de composition commune) — ${sp.effect}`);
+    else if (matchLine.kind === 'close') parts.push(`Lu comme « ${sp.fr} » (${Math.round(matchLine.score * 100)} % de concordance) — ${sp.effect}`);
     else parts.push(`Apparenté à « ${sp.fr} » (${Math.round(matchLine.score * 100)} % de composition commune).`);
+    if (opts.match?.rival) parts.push(`Lecture incertaine : « ${opts.match.rival.fr} » explique le dessin presque aussi bien.`);
+    const relus = opts.match?.corrections?.filter((c) => c.from) ?? [];
+    const retrouves = opts.match?.corrections?.filter((c) => !c.from) ?? [];
+    if (relus.length) parts.push(`${cap(num(relus.length))} tracé${relus.length > 1 ? 's' : ''} ${relus.length > 1 ? 'ont' : 'a'} été relu${relus.length > 1 ? 's' : ''} d'après ce sceau (le dessin était ambigu) : ${relus.map((c) => `vers ${compass(c.angle)}, ${GLYPHS[c.from].fr} → ${GLYPHS[c.to].fr}`).join(' ; ')}.`);
+    if (retrouves.length) parts.push(`${cap(num(retrouves.length))} glyphe${retrouves.length > 1 ? 's' : ''} attendu${retrouves.length > 1 ? 's' : ''} par ce sceau ${retrouves.length > 1 ? 'ont' : 'a'} été retrouvé${retrouves.length > 1 ? 's' : ''} à l'endroit prévu, là où le découpage automatique n'avait rien isolé : ${retrouves.map((c) => `${GLYPHS[c.to].fr} vers ${compass(c.angle)}`).join(' ; ')}.`);
   } else if (A.sigils.length || A.signGroups.length) {
     parts.push('Composition inédite : aucun sceau connu du grimoire ne partage cette structure.');
   }
 
-  if (A.unknown.length) {
-    parts.push(`${cap(num(A.unknown.length))} ${plural(A.unknown.length, 'symbole')} non identifié${A.unknown.length > 1 ? 's' : ''} (${A.unknown.map((u) => `vers ${compass(u.angle)}`).join(', ')}).`);
+  const strays = A.unknown.filter((u) => u.stray), orphans = A.unknown.filter((u) => !u.stray);
+  if (orphans.length) {
+    parts.push(`${cap(num(orphans.length))} ${plural(orphans.length, 'symbole')} non identifié${orphans.length > 1 ? 's' : ''} (${orphans.map((u) => `vers ${compass(u.angle)}`).join(', ')}).`);
     warnings.push('symboles inconnus');
+  }
+  if (strays.length) {
+    parts.push(`${cap(num(strays.length))} ${plural(strays.length, 'tracé')} ne trouve${strays.length > 1 ? 'nt' : ''} pas ${strays.length > 1 ? 'leur' : 'sa'} place dans ce sceau (${strays.map((u) => `vers ${compass(u.angle)}`).join(', ')}) : bavure, rature, ou symbole qui n'a pas encore été identifié.`);
+    warnings.push('tracés écartés');
   }
 
   return { title, type, analysis: A, paragraphs: parts, warnings, match: matchLine };

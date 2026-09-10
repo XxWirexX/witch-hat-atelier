@@ -4,6 +4,8 @@ import { sealSVG } from '../seal.js';
 import { SPELLS } from '../spells.js';
 import { maskFromImageData, recognize, relabel, assembleSeal } from '../recognizer.js';
 import { readSeal } from '../interpreter.js';
+import { readImage } from '../hypothesis.js';
+import { sloppyMask } from '../sloppy.js';
 import { h, glyphIcon, renderReading, openDrawer, download } from './shared.js';
 import { spellDetail } from './grimoire.js';
 
@@ -12,6 +14,7 @@ const CANVAS = 720;
 export function mountRead(root, ctx) {
   let mode = 'image';
   let rec = null;            // dernier résultat de reconnaissance
+  let lastReading = null;    // lecture correspondante (hypothèses comprises)
   let showOverlay = true;
   let sourceImage = null;    // ImageBitmap / Image chargée
   let strokes = [];          // dessin à main levée
@@ -33,10 +36,13 @@ export function mountRead(root, ctx) {
   const dropzone = h('div', { class: 'dropzone' }, placeholder, canvas, overlay, fileInput);
 
   const exampleSelect = h('select', {}, ...SPELLS.map((s) => h('option', { value: s.id }, s.fr)));
-  const jitter = h('input', { type: 'checkbox', checked: true });
+  const sloppySelect = h('select', {},
+    h('option', { value: 'clean' }, 'tracé net'),
+    h('option', { value: 'moderate', selected: true }, 'main hésitante'),
+    h('option', { value: 'severe' }, 'franchement mal dessiné'));
   const exampleBar = h('div', { class: 'draw-tools', hidden: true },
     h('label', {}, 'Sort : ', exampleSelect),
-    h('label', {}, jitter, ' rotation & décalage aléatoires'),
+    h('label', {}, 'Tracé : ', sloppySelect),
     h('button', { class: 'btn small', onClick: () => loadExample() }, 'Générer'),
   );
   const penRange = h('input', { type: 'range', min: 2, max: 16, value: pen, onInput: (e) => { pen = +e.target.value; } });
@@ -130,22 +136,34 @@ export function mountRead(root, ctx) {
 
   function loadExample() {
     const sp = SPELLS.find((s) => s.id === exampleSelect.value);
-    const svg = sealSVG(sp.seal, { size: 640, color: '#1a0f0a', strokeWidth: 4.5 });
-    const img = new Image();
-    img.onload = () => {
-      canvas.width = CANVAS; canvas.height = CANVAS; overlay.width = CANVAS; overlay.height = CANVAS;
-      cx.fillStyle = '#fff'; cx.fillRect(0, 0, CANVAS, CANVAS);
-      cx.save();
-      const rot = jitter.checked ? (Math.random() - 0.5) * 60 : 0;
-      const dx = jitter.checked ? (Math.random() - 0.5) * 40 : 0, dy = jitter.checked ? (Math.random() - 0.5) * 40 : 0;
-      cx.translate(CANVAS / 2 + dx, CANVAS / 2 + dy); cx.rotate((rot * Math.PI) / 180);
-      cx.drawImage(img, -320, -320);
-      cx.restore();
-      sourceImage = null;
-      placeholder.hidden = true; canvas.hidden = false; overlay.hidden = false;
-      analyze();
-    };
-    img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    const profile = sloppySelect.value;
+    if (profile === 'clean') {
+      const svg = sealSVG(sp.seal, { size: 640, color: '#1a0f0a', strokeWidth: 4.5 });
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = CANVAS; canvas.height = CANVAS; overlay.width = CANVAS; overlay.height = CANVAS;
+        cx.fillStyle = '#fff'; cx.fillRect(0, 0, CANVAS, CANVAS);
+        cx.save();
+        cx.translate(CANVAS / 2, CANVAS / 2); cx.rotate(((Math.random() - 0.5) * 60 * Math.PI) / 180);
+        cx.drawImage(img, -320, -320);
+        cx.restore();
+        sourceImage = null; placeholder.hidden = true; canvas.hidden = false; overlay.hidden = false;
+        analyze();
+      };
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+      return;
+    }
+    // tracé maladroit : traits tremblés, ruptures, cercle ovale, glyphes de travers
+    const mask = sloppyMask(sp.seal, Math.floor(Math.random() * 1e6), { profile, size: CANVAS });
+    canvas.width = CANVAS; canvas.height = CANVAS; overlay.width = CANVAS; overlay.height = CANVAS;
+    const img = cx.createImageData(CANVAS, CANVAS);
+    for (let i = 0, j = 0; i < mask.data.length; i++, j += 4) {
+      const v = mask.data[i] ? 26 : 255;
+      img.data[j] = v; img.data[j + 1] = v; img.data[j + 2] = v; img.data[j + 3] = 255;
+    }
+    cx.putImageData(img, 0, 0);
+    sourceImage = null; placeholder.hidden = true; canvas.hidden = false; overlay.hidden = false;
+    analyze();
   }
 
   // Ouvre un sceau venu du compositeur / grimoire : on le rend puis on le reconnaît.
@@ -178,9 +196,20 @@ export function mountRead(root, ctx) {
       const t0 = performance.now();
       const img = cx.getImageData(0, 0, canvas.width, canvas.height);
       const mask = maskFromImageData(img);
-      rec = recognize(mask);
+      const out = readImage(mask, mode === 'draw' ? { mergeScales: [1] } : {});
+      rec = out?.rec ?? recognize(mask);
+      lastReading = out?.reading ?? null;
       if (!rec.ok) { status.textContent = rec.reason; clearResult(); return; }
-      status.textContent = `${rec.elements.length} glyphe${rec.elements.length > 1 ? 's' : ''} reconnu${rec.elements.length > 1 ? 's' : ''}${rec.unknown.length ? `, ${rec.unknown.length} inconnu${rec.unknown.length > 1 ? 's' : ''}` : ''} · cercle ${Math.round(rec.ring.coverage * 100)} % tracé${rec.ring.fallback ? ' (cercle non détecté, estimé)' : ''} · ${Math.round(performance.now() - t0)} ms`;
+      const recovered = (lastReading?.hypothesis?.corrections ?? []).filter((c) => !c.from).length;
+      const relabelled = (lastReading?.hypothesis?.corrections ?? []).filter((c) => c.from).length;
+      status.textContent = [
+        `${rec.elements.length} glyphe${rec.elements.length > 1 ? 's' : ''} reconnu${rec.elements.length > 1 ? 's' : ''}`,
+        rec.unknown.length ? `${rec.unknown.length} inconnu${rec.unknown.length > 1 ? 's' : ''}` : null,
+        relabelled ? `${relabelled} relu${relabelled > 1 ? 's' : ''} d'après le grimoire` : null,
+        recovered ? `${recovered} retrouvé${recovered > 1 ? 's' : ''} par sondage` : null,
+        `cercle ${Math.round(rec.ring.coverage * 100)} % tracé${rec.ring.fallback ? ' (estimé)' : ''}`,
+        `${Math.round(performance.now() - t0)} ms`,
+      ].filter(Boolean).join(' · ');
       drawOverlay();
       renderResult();
     });
@@ -203,6 +232,7 @@ export function mountRead(root, ctx) {
     }
     o.font = `${Math.max(11, overlay.width / 60)}px ${getComputedStyle(document.body).fontFamily}`;
     for (const e of [...rec.elements, ...rec.unknown]) {
+      if (!e.box) continue; // glyphe retrouvé par sondage : pas de tracé isolé à encadrer
       const known = rec.elements.includes(e) && !e.ignored;
       o.lineWidth = 2;
       o.strokeStyle = known ? (e.confidence > 0.55 ? 'rgba(47,107,58,0.9)' : 'rgba(138,90,18,0.9)') : 'rgba(160,40,40,0.9)';
@@ -214,7 +244,8 @@ export function mountRead(root, ctx) {
   }
 
   function renderResult() {
-    const reading = readSeal(rec.seal, { unknown: rec.unknown.map((u) => ({ angle: u.angle })) });
+    // après une correction manuelle, on relit le sceau tel qu'il a été corrigé
+    const reading = lastReading ?? readSeal(rec.seal, { unknown: rec.unknown.map((u) => ({ angle: u.angle })) });
     readingBox.replaceChildren(renderReading(reading, { onOpenSpell: (sp) => openDrawer(spellDetail(sp, ctx)) }));
     readingBox.append(h('div', { class: 'btn-row', style: { marginTop: '0.8rem' } },
       h('button', { class: 'btn small', onClick: () => ctx.goto('composer', { seal: rec.seal, name: reading.title }) }, 'Ouvrir le relevé dans le compositeur'),
@@ -227,7 +258,7 @@ export function mountRead(root, ctx) {
     const all = [...rec.elements, ...rec.unknown].sort((a, b) => a.angle - b.angle);
     for (const e of all) {
       const known = rec.elements.includes(e);
-      const sel = h('select', { onChange: (ev) => { const v = ev.target.value; if (v === '__ignore') { e.ignored = true; } else { const [g, inv] = v.split('|'); if (!known) { rec.unknown = rec.unknown.filter((u) => u !== e); rec.elements.push(e); } relabel(rec, e, g, inv === '1'); } rec.seal = assembleSeal(rec); drawOverlay(); renderResult(); } });
+      const sel = h('select', { onChange: (ev) => { const v = ev.target.value; if (v === '__ignore') { e.ignored = true; } else { const [g, inv] = v.split('|'); if (!known) { rec.unknown = rec.unknown.filter((u) => u !== e); rec.elements.push(e); } relabel(rec, e, g, inv === '1'); } rec.seal = assembleSeal(rec); lastReading = null; drawOverlay(); renderResult(); } });
       const opts = [];
       for (const a of e.alternatives) opts.push([`${a.glyph}|${a.inverted ? 1 : 0}`, `${GLYPHS[a.glyph].fr}${a.inverted ? ' (inversé)' : ''} — ${Math.round(a.confidence * 100)} %`]);
       const group = (label, ids) => { const og = h('optgroup', { label }); for (const id of ids) { og.append(h('option', { value: `${id}|0` }, GLYPHS[id].fr)); if (GLYPHS[id].kind === 'sign' && GLYPHS[id].dir !== 'non') og.append(h('option', { value: `${id}|1` }, `${GLYPHS[id].fr} (inversé)`)); } return og; };

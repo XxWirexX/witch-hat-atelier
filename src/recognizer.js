@@ -14,8 +14,12 @@ import { GLYPHS, placedStrokes } from './glyphs.js';
 import { inwardRotation, rasterizePolylines, makeSeal, canonicalOrientation } from './seal.js';
 import { bbox as strokesBBox } from './geometry.js';
 
-const TPL = 40;         // taille des gabarits normalisés
+const TPL = 40;         // taille des gabarits normalisés (appariement grossier)
 const TPL_FIT = 34;     // côté utile dans le gabarit
+// Un grand signe conteneur (Pluie, Marionnettes, Étirement, Fenêtres) occupe tout
+// le sceau : réduit à 40 px, ce qui le distingue de ses voisins disparaît. Les
+// meilleurs candidats sont donc re-comparés à cette résolution.
+const TPL_FINE = 76;
 
 // ───────────────────────── Masque ─────────────────────────
 
@@ -70,7 +74,52 @@ export function downsample(mask, maxSide = 700) {
 
 // ───────────────────────── Composantes ─────────────────────────
 
-export function components(mask) {
+// Dilatation carrée de rayon r (séparable).
+export function dilate(mask, r) {
+  const { width: W, height: H, data } = mask;
+  if (r <= 0) return data;
+  const tmp = new Uint8Array(W * H), out = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) {
+    let run = 0;
+    for (let x = 0; x < W + r; x++) {
+      if (x < W && data[y * W + x]) run = 2 * r + 1; else if (run > 0) run--;
+      const tx = x - r;
+      if (tx >= 0 && tx < W && run > 0) tmp[y * W + tx] = 1;
+    }
+  }
+  for (let x = 0; x < W; x++) {
+    let run = 0;
+    for (let y = 0; y < H + r; y++) {
+      if (y < H && tmp[y * W + x]) run = 2 * r + 1; else if (run > 0) run--;
+      const ty = y - r;
+      if (ty >= 0 && ty < H && run > 0) out[ty * W + x] = 1;
+    }
+  }
+  return out;
+}
+
+// Composantes connexes sur le masque dilaté (ponte les petites ruptures de
+// trait), mais chaque composante ne garde que ses pixels d'origine.
+export function components(mask, bridge = 0) {
+  if (bridge > 0) {
+    const { width: W, height: H, data } = mask;
+    const wide = components({ width: W, height: H, data: dilate(mask, bridge) });
+    const comps = [];
+    const map = new Map();
+    for (let i = 0; i < W * H; i++) {
+      if (!data[i]) continue;
+      const l = wide.labels[i];
+      let c = map.get(l);
+      if (!c) { c = { id: comps.length, pix: [], area: 0, x0: W, y0: H, x1: 0, y1: 0, sx: 0, sy: 0 }; map.set(l, c); comps.push(c); }
+      const x = i % W, y = (i / W) | 0;
+      c.pix.push(i); c.sx += x; c.sy += y;
+      if (x < c.x0) c.x0 = x; if (x > c.x1) c.x1 = x; if (y < c.y0) c.y0 = y; if (y > c.y1) c.y1 = y;
+    }
+    for (const c of comps) { c.area = c.pix.length; c.w = c.x1 - c.x0 + 1; c.h = c.y1 - c.y0 + 1; c.cx = c.sx / c.area; c.cy = c.sy / c.area; delete c.sx; delete c.sy; }
+    const labels = new Int32Array(W * H).fill(-1);
+    comps.forEach((c) => { for (const p of c.pix) labels[p] = c.id; });
+    return { comps, labels };
+  }
   const { width: W, height: H, data } = mask;
   const labels = new Int32Array(W * H).fill(-1);
   const comps = [];
@@ -97,6 +146,74 @@ export function components(mask) {
     comps.push({ id, pix, area: pix.length, x0, y0, x1, y1, w: x1 - x0 + 1, h: y1 - y0 + 1, cx: sx / pix.length, cy: sy / pix.length });
   }
   return { comps, labels };
+}
+
+// Largeur de trait : médiane des longueurs de runs horizontaux d'encre (≥ 1).
+export function estimateStrokeWidth(mask) {
+  const { width: W, height: H, data } = mask;
+  const hist = new Uint32Array(64);
+  let n = 0;
+  for (let y = 0; y < H; y += 2) {
+    let run = 0;
+    for (let x = 0; x <= W; x++) {
+      if (x < W && data[y * W + x]) run++;
+      else if (run) { hist[Math.min(63, run)]++; n++; run = 0; }
+    }
+  }
+  // 30e centile : les runs tangents aux courbes (longs) ne comptent pas
+  let acc = 0;
+  for (let i = 1; i < 64; i++) { acc += hist[i]; if (acc >= n * 0.3) return i; }
+  return 1;
+}
+
+// Ellipse de l'anneau, robuste à une brèche : ajuste r(φ) ≈ r0 + c·cos 2φ + s·sin 2φ
+// sur les pixels de l'anneau (moindres carrés), d'où l'orientation et le rapport d'axes.
+export function ringEllipse(pix, W, circle) {
+  let a00 = 0, a01 = 0, a02 = 0, a11 = 0, a12 = 0, a22 = 0, b0 = 0, b1 = 0, b2 = 0;
+  for (const p of pix) {
+    const x = (p % W) - circle.cx, y = ((p / W) | 0) - circle.cy;
+    const r = Math.hypot(x, y), phi = Math.atan2(y, x);
+    const c = Math.cos(2 * phi), s = Math.sin(2 * phi);
+    a00 += 1; a01 += c; a02 += s; a11 += c * c; a12 += c * s; a22 += s * s;
+    b0 += r; b1 += r * c; b2 += r * s;
+  }
+  const sol = solve3([[a00, a01, a02], [a01, a11, a12], [a02, a12, a22]], [b0, b1, b2]);
+  if (!sol) return { cx: circle.cx, cy: circle.cy, theta: 0, ratio: 1 };
+  const [r0, c2, s2] = sol;
+  const amp = Math.hypot(c2, s2);
+  return { cx: circle.cx, cy: circle.cy, theta: Math.atan2(s2, c2) / 2, ratio: Math.max(0.3, (r0 - amp) / (r0 + amp)) };
+}
+
+// Ellipse d'inertie d'un nuage de pixels (anneau vu de biais) : orientation du
+// grand axe et rapport petit/grand axe.
+export function inertiaEllipse(pix, W) {
+  let n = pix.length, sx = 0, sy = 0;
+  for (const p of pix) { sx += p % W; sy += (p / W) | 0; }
+  const cx = sx / n, cy = sy / n;
+  let m20 = 0, m02 = 0, m11 = 0;
+  for (const p of pix) { const dx = (p % W) - cx, dy = ((p / W) | 0) - cy; m20 += dx * dx; m02 += dy * dy; m11 += dx * dy; }
+  m20 /= n; m02 /= n; m11 /= n;
+  const theta = 0.5 * Math.atan2(2 * m11, m20 - m02);
+  const d = Math.sqrt(((m20 - m02) / 2) ** 2 + m11 * m11);
+  const l1 = (m20 + m02) / 2 + d, l2 = (m20 + m02) / 2 - d;
+  return { cx, cy, theta, ratio: l1 > 0 ? Math.sqrt(Math.max(l2, 0) / l1) : 1 };
+}
+
+// Redresse une ellipse en cercle : compression le long du grand axe (angle theta)
+// par `ratio`, autour de (cx, cy). Renvoie le masque redressé et la transformation.
+export function rectifyMask(mask, el) {
+  const { width: W, height: H, data } = mask;
+  const out = new Uint8Array(W * H);
+  const c = Math.cos(el.theta), s = Math.sin(el.theta);
+  // avant : (x, y) → coordonnées propres (u, v) ; u' = u * ratio ; retour au repère image
+  const fwd = ([x, y]) => { const dx = x - el.cx, dy = y - el.cy; const u = (dx * c + dy * s) * el.ratio, v = -dx * s + dy * c; return [el.cx + u * c - v * s, el.cy + u * s + v * c]; };
+  const inv = ([x, y]) => { const dx = x - el.cx, dy = y - el.cy; const u = (dx * c + dy * s) / el.ratio, v = -dx * s + dy * c; return [el.cx + u * c - v * s, el.cy + u * s + v * c]; };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const [sx, sy] = inv([x + 0.5, y + 0.5]);
+    const ix = Math.floor(sx), iy = Math.floor(sy);
+    if (ix >= 0 && iy >= 0 && ix < W && iy < H && data[iy * W + ix]) out[y * W + x] = 1;
+  }
+  return { mask: { width: W, height: H, data: out, factor: mask.factor }, fwd, inv };
 }
 
 // Ajustement algébrique d'un cercle (Kåsa).
@@ -164,7 +281,7 @@ function angularCoverage(pix, W, circle, bins = 360) {
 function innerRingOf(c, W, H, ring) {
   const R = ring.r;
   let fit = fitCircle(c.pix, W);
-  if (!fit || fit.r < 0.18 * R || fit.r > 0.92 * R) return null;
+  if (!fit || fit.r < 0.09 * R || fit.r > 0.92 * R) return null;
   for (let pass = 0; pass < 2; pass++) {
     const band = [], off = [];
     for (const p of c.pix) { const x = p % W, y = (p / W) | 0; (Math.abs(Math.hypot(x - fit.cx, y - fit.cy) - fit.r) < 0.07 * fit.r ? band : off).push(p); }
@@ -173,7 +290,8 @@ function innerRingOf(c, W, H, ring) {
     if (!f2 || f2.rms > 0.05 * f2.r) return null;
     fit = f2;
     if (pass === 1) {
-      if (fit.r < 0.18 * R || fit.r > 0.92 * R || Math.hypot(fit.cx - ring.cx, fit.cy - ring.cy) + fit.r > 1.05 * R) return null;
+      // un sceau satellite peut déborder du cercle principal (sort-miroir)
+      if (fit.r < 0.09 * R || fit.r > 0.92 * R || Math.hypot(fit.cx - ring.cx, fit.cy - ring.cy) - fit.r > 1.15 * R) return null;
       const cv = angularCoverage(band, W, fit);
       if (cv.coverage < 0.8) return null;
       const detached = [];
@@ -192,22 +310,23 @@ function innerRingOf(c, W, H, ring) {
 
 const tplCache = new Map();
 
-function normalizeBitmap(points, w, h) {
-  // points : liste de [x, y] (pixels) ; renvoie un bitmap TPL×TPL centré, échelle max(w,h) → TPL_FIT
-  const bmp = new Uint8Array(TPL * TPL);
-  const scale = TPL_FIT / Math.max(w, h, 1);
-  const ox = (TPL - w * scale) / 2, oy = (TPL - h * scale) / 2;
+function normalizeBitmap(points, w, h, res = TPL) {
+  // points : liste de [x, y] (pixels) ; bitmap res×res centré, échelle max(w,h) → 85 % du côté
+  const bmp = new Uint8Array(res * res);
+  const fit = res * (TPL_FIT / TPL);
+  const scale = fit / Math.max(w, h, 1);
+  const ox = (res - w * scale) / 2, oy = (res - h * scale) / 2;
   for (const [x, y] of points) {
-    const px = Math.min(TPL - 1, Math.max(0, (x * scale + ox) | 0));
-    const py = Math.min(TPL - 1, Math.max(0, (y * scale + oy) | 0));
-    bmp[py * TPL + px] = 1;
+    const px = Math.min(res - 1, Math.max(0, (x * scale + ox) | 0));
+    const py = Math.min(res - 1, Math.max(0, (y * scale + oy) | 0));
+    bmp[py * res + px] = 1;
   }
   return bmp;
 }
 
 // Transformée de distance (chanfrein 3-4), en unités de pixel.
-function distanceTransform(bmp) {
-  const N = TPL, INF = 1e6;
+function distanceTransform(bmp, N = TPL) {
+  const INF = 1e6;
   const d = new Float32Array(N * N);
   for (let i = 0; i < N * N; i++) d[i] = bmp[i] ? 0 : INF;
   for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
@@ -229,34 +348,45 @@ function pixelsOf(bmp) {
   return out;
 }
 
-function template(glyph, rot, inverted) {
+function template(glyph, rot, inverted, res = TPL) {
   const r = Math.round(rot / 5) * 5;
-  const key = `${glyph}|${inverted ? 1 : 0}|${((r % 360) + 360) % 360}`;
+  const key = `${glyph}|${inverted ? 1 : 0}|${((r % 360) + 360) % 360}|${res}`;
   let t = tplCache.get(key);
   if (t) return t;
   const { strokes, dots } = placedStrokes(glyph, r, inverted);
   const bb = strokesBBox(strokes, dots);
-  const scale = TPL_FIT / Math.max(bb.w, bb.h, 1);
-  const ox = (TPL - bb.w * scale) / 2, oy = (TPL - bb.h * scale) / 2;
+  const fit = res * (TPL_FIT / TPL);
+  const scale = fit / Math.max(bb.w, bb.h, 1);
+  const ox = (res - bb.w * scale) / 2, oy = (res - bb.h * scale) / 2;
   const ras = rasterizePolylines(
     strokes.map((pts) => ({ pts, width: 1 })),
     dots.map(([x, y, rr]) => ({ x, y, r: rr })),
-    { width: TPL, height: TPL, map: ([x, y]) => [(x - bb.x0) * scale + ox, (y - bb.y0) * scale + oy], thickness: 1.6, scale },
+    { width: res, height: res, map: ([x, y]) => [(x - bb.x0) * scale + ox, (y - bb.y0) * scale + oy], thickness: 1.6 * (res / TPL), scale },
   );
   const bmp = ras.data;
-  t = { bmp, dt: distanceTransform(bmp), pix: pixelsOf(bmp), aspect: bb.w / Math.max(bb.h, 1e-6), extent: Math.max(bb.w, bb.h) / 100 };
+  t = { bmp, dt: distanceTransform(bmp, res), pix: pixelsOf(bmp), aspect: bb.w / Math.max(bb.h, 1e-6), extent: Math.max(bb.w, bb.h) / 100, res };
   tplCache.set(key, t);
   return t;
 }
 
+const DT_CAP = 7;
+// Le score est ramené à l'échelle du gabarit 40 px pour rester comparable
+// quelle que soit la résolution de comparaison.
 function chamfer(cand, tpl) {
+  const k = TPL / (tpl.res || TPL), cap = DT_CAP / k;
   let a = 0;
-  for (const i of tpl.pix) a += cand.dt[i];
+  for (const i of tpl.pix) a += Math.min(cap, cand.dt[i]);
   let b = 0;
-  for (const i of cand.pix) b += tpl.dt[i];
-  const s = 0.5 * (a / tpl.pix.length) + 0.5 * (b / cand.pix.length);
+  for (const i of cand.pix) b += Math.min(cap, tpl.dt[i]);
+  const s = k * (0.5 * (a / tpl.pix.length) + 0.5 * (b / cand.pix.length));
   const aspectPen = Math.abs(Math.log(Math.max(cand.aspect, 0.05) / Math.max(tpl.aspect, 0.05))) * 1.2;
   return s + aspectPen;
+}
+
+// Bitmap normalisé + transformée de distance d'un groupe de pixels.
+function candidateOf(pts, w, h, res = TPL) {
+  const bmp = normalizeBitmap(pts, w, h, res);
+  return { bmp, dt: distanceTransform(bmp, res), pix: pixelsOf(bmp), aspect: w / Math.max(h, 1), res, pts, w, h };
 }
 
 export function scoreToConfidence(score) {
@@ -297,7 +427,7 @@ function gapBetween(a, b, W) {
   return g > 0 ? g : pixelGap(a, b, W);
 }
 
-function groupComponents(comps, ring, W) {
+function groupComponents(comps, ring, W, mergeScale = 1) {
   const R = ring.r;
   const parent = comps.map((_, i) => i);
   const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
@@ -317,6 +447,7 @@ function groupComponents(comps, ring, W) {
       thr = dCentre < 0.27 ? 0.12 : 0.05;
       if (Math.min(ea, eb) < 0.05) thr += 0.02;
     }
+    thr *= mergeScale;
     if (bboxGap(a, b) < thr * R && gapBetween(a, b, W) < thr * R) parent[find(i)] = find(j);
   }
   const groups = new Map();
@@ -362,10 +493,13 @@ function candidateRotations(glyph, dist, inward) {
 
 export function recognize(inputMask, opts = {}) {
   const t0 = Date.now();
-  const mask = downsample(inputMask, opts.maxSide ?? 700);
+  const mask = opts._rectified ? inputMask : downsample(inputMask, opts.maxSide ?? 1000);
   const W = mask.width;
-  const { comps } = components(mask);
-  const debug = { factor: mask.factor, width: W, height: mask.height };
+  // largeur de trait estimée (médiane des runs horizontaux d'encre) → pont des petites ruptures
+  const strokeW = estimateStrokeWidth(mask);
+  const bridge = Math.max(1, Math.min(2, Math.round(strokeW * 0.4)));
+  const { comps } = components(mask, bridge);
+  const debug = { factor: mask.factor, width: W, height: mask.height, strokeW, bridge };
   if (!comps.length) return { ok: false, reason: 'Aucune encre détectée.', debug };
 
   // 1. anneau
@@ -375,8 +509,31 @@ export function recognize(inputMask, opts = {}) {
     const fit = fitCircle(c.pix, W);
     if (!fit) continue;
     const ext = Math.max(c.w, c.h);
-    if (fit.rms < 0.07 * fit.r && ext > 0.35 * Math.min(W, mask.height) && ext > 1.2 * fit.r) { ring = fit; ringComps = [c]; break; }
+    if (fit.rms < 0.1 * fit.r && ext > 0.35 * Math.min(W, mask.height) && ext > 1.2 * fit.r) { ring = fit; ringComps = [c]; break; }
   }
+  // cercle vu de biais (ellipse) : on redresse l'image et on recommence
+  if (ring && !opts._rectified) {
+    const el = ringEllipse(ringComps[0].pix, W, ring);
+    if (el.ratio < 0.975 && el.ratio > 0.6) {
+      const { mask: rect, fwd, inv } = rectifyMask(mask, el);
+      const res = recognize(rect, { ...opts, _rectified: true });
+      if (res.ok) {
+        const f = mask.factor;
+        const back = ([x, y]) => { const [u, v] = inv([x / f, y / f]); return [u * f, v * f]; };
+        for (const e of [...res.elements, ...res.unknown]) {
+          const corners = [[e.box.x0, e.box.y0], [e.box.x1, e.box.y0], [e.box.x0, e.box.y1], [e.box.x1, e.box.y1]].map(back);
+          e.box = { x0: Math.min(...corners.map((p) => p[0])), y0: Math.min(...corners.map((p) => p[1])), x1: Math.max(...corners.map((p) => p[0])), y1: Math.max(...corners.map((p) => p[1])) };
+        }
+        const [rcx, rcy] = back([res.ring.cx, res.ring.cy]);
+        res.ring = { ...res.ring, cx: rcx, cy: rcy, r: res.ring.r / el.ratio, ellipse: { ratio: el.ratio, theta: el.theta } };
+        res.innerRings = res.innerRings.map((ir) => { const [x, y] = back([ir.cx, ir.cy]); return { ...ir, cx: x, cy: y, r: ir.r / el.ratio }; });
+        res.debug.rectified = el;
+        void fwd;
+      }
+      return res;
+    }
+  }
+  const bandTol = Math.min(0.12 * ring?.r || 0, Math.max(0.045 * (ring?.r || 0), 2.5 * (ring?.rms || 0)));
   if (!ring) {
     // repli : cercle englobant de toute l'encre
     const all = comps.flatMap((c) => c.pix);
@@ -387,26 +544,36 @@ export function recognize(inputMask, opts = {}) {
   }
   // absorbe les morceaux d'anneau (brèche + levers de plume)
   const rest = [];
+  const tol = debug.ringFallback ? 0.05 * ring.r : Math.max(bandTol, 0.05 * ring.r);
   for (const c of comps) {
     if (ringComps.includes(c)) continue;
     let inBand = 0;
-    for (const p of c.pix) { const x = p % W, y = (p / W) | 0; if (Math.abs(Math.hypot(x - ring.cx, y - ring.cy) - ring.r) < 0.05 * ring.r) inBand++; }
-    if (inBand > 0.8 * c.area && Math.max(c.w, c.h) > 0.12 * ring.r) ringComps.push(c); else rest.push(c);
+    for (const p of c.pix) { const x = p % W, y = (p / W) | 0; if (Math.abs(Math.hypot(x - ring.cx, y - ring.cy) - ring.r) < tol) inBand++; }
+    const ext = Math.max(c.w, c.h);
+    if ((inBand > 0.8 * c.area && ext > 0.12 * ring.r) || (inBand > 0.92 * c.area && ext > 0.03 * ring.r && Math.hypot(c.cx - ring.cx, c.cy - ring.cy) > 0.9 * ring.r)) ringComps.push(c); else rest.push(c);
   }
   // pixels de l'anneau hors de la bande circulaire = symboles accrochés au cercle (Griffes, signes qui touchent)
   const bandPix = [], offPix = [];
   for (const c of ringComps) for (const p of c.pix) {
     const x = p % W, y = (p / W) | 0;
-    (Math.abs(Math.hypot(x - ring.cx, y - ring.cy) - ring.r) < 0.045 * ring.r ? bandPix : offPix).push(p);
+    (Math.abs(Math.hypot(x - ring.cx, y - ring.cy) - ring.r) < tol ? bandPix : offPix).push(p);
   }
   if (bandPix.length > 50) { const f = fitCircle(bandPix, W); if (f && f.rms < 0.08 * f.r) ring = f; }
   if (offPix.length > 8) {
     const sub = new Uint8Array(W * mask.height);
     for (const p of offPix) sub[p] = 1;
-    for (const c of components({ width: W, height: mask.height, data: sub }).comps) if (c.area >= 6) rest.push(c);
+    // le trait du cercle coupe en deux les signes qui le traversent (Griffes) :
+    // on ponte la largeur de la bande retirée pour les recoller
+    const acrossRing = Math.max(bridge, Math.ceil(tol) + 1);
+    for (const c of components({ width: W, height: mask.height, data: sub }, acrossRing).comps) if (c.area >= 6) { c.attached = true; rest.push(c); }
   }
   const cov = bandPix.length ? angularCoverage(bandPix, W, ring) : { coverage: 0, gap: null };
   const R = ring.r;
+  // taches : composantes minuscules par rapport au trait
+  // poussière : moins d'encre que n'en demanderait le plus petit glyphe lisible
+  const speckLimit = Math.max(10, 0.5 * strokeW * 0.06 * ring.r);
+  const cleaned = rest.filter((c) => !(c.area < speckLimit && Math.max(c.w, c.h) < Math.max(5, 3 * strokeW)));
+  rest.length = 0; rest.push(...cleaned);
 
   // 2. cercles intérieurs
   let innerRings = [];
@@ -414,7 +581,7 @@ export function recognize(inputMask, opts = {}) {
   const detached = [];
   for (const c of rest) {
     const ext = Math.max(c.w, c.h);
-    if (ext > 0.36 * R) {
+    if (ext > 0.19 * R) {
       const ir = innerRingOf(c, W, mask.height, ring);
       if (ir) { innerRings.push(ir); detached.push(...ir.detached); continue; }
     }
@@ -428,37 +595,34 @@ export function recognize(inputMask, opts = {}) {
     innerRings = innerRings.filter((c) => !concentric.includes(c));
   }
 
-  // 3. regroupement en glyphes
-  const groups = groupComponents(glyphComps, ring, W);
-
-  // 4. appariement
-  const elements = [], unknown = [];
+  // 3. appariement d'un groupe de pixels (utilisé par le regroupement et pour le résultat)
   const wanted = opts.glyphs || Object.keys(GLYPHS);
-  for (const gr of groups) {
+  const probes = [];   // de quoi ré-apparier un tracé à n'importe quel glyphe, après coup
+  const matchGroup = (gr) => {
     const ext = Math.max(gr.w, gr.h) / R;
-    if (ext < 0.035) continue; // poussière
+    if (ext < 0.035) return null; // poussière
     const dx = (gr.cx - ring.cx) / R, dy = (gr.cy - ring.cy) / R;
-    // sceau parent : anneau intérieur contenant le glyphe ?
     let parent = null;
     for (const ir of innerRings) if (Math.hypot(gr.cx - ir.cx, gr.cy - ir.cy) < ir.r * 0.95) parent = ir;
     const px = parent ? (gr.cx - parent.cx) / parent.r : dx, py = parent ? (gr.cy - parent.cy) / parent.r : dy;
     const dist = Math.hypot(px, py);
     const inward = inwardRotation(px, py);
     const pts = gr.pix.map((p) => [(p % W) - gr.x0, ((p / W) | 0) - gr.y0]);
-    const bmp = normalizeBitmap(pts, gr.w, gr.h);
-    const cand = { bmp, dt: distanceTransform(bmp), pix: pixelsOf(bmp), aspect: gr.w / Math.max(gr.h, 1) };
+    const cand = candidateOf(pts, gr.w, gr.h);
+    if (!cand.pix.length) return null;
     let best = null;
     const ranked = [];
     for (const glyph of wanted) {
       for (const { rot, inverted } of candidateRotations(glyph, dist, inward)) {
         const tpl = template(glyph, rot, inverted);
+        if (Math.abs(Math.log(Math.max(cand.aspect, 0.05) / Math.max(tpl.aspect, 0.05))) > 1.1) continue;
         const s = chamfer(cand, tpl);
         ranked.push({ glyph, rot, inverted, score: s, extent: tpl.extent });
         if (!best || s < best.score) best = { glyph, rot, inverted, score: s, extent: tpl.extent };
       }
     }
+    if (!best) return null;
     ranked.sort((a, b) => a.score - b.score);
-    // affinage angulaire des meilleurs candidats
     const seen = new Set();
     for (const r of ranked) {
       if (seen.has(r.glyph)) continue;
@@ -473,13 +637,47 @@ export function recognize(inputMask, opts = {}) {
     }
     ranked.sort((a, b) => a.score - b.score);
     const alternatives = [];
-    for (const r of ranked) { if (!alternatives.some((a) => a.glyph === r.glyph)) alternatives.push(r); if (alternatives.length >= 4) break; }
+    for (const r of ranked) { if (!alternatives.some((a) => a.glyph === r.glyph)) alternatives.push(r); if (alternatives.length >= 12) break; }
+    // seconde passe fine sur les meilleurs candidats : à 40 px, deux grands
+    // signes conteneurs se ressemblent ; à 76 px, leur détail les sépare
+    const fine = candidateOf(cand.pts, cand.w, cand.h, TPL_FINE);
+    for (const a of alternatives.slice(0, 5)) {
+      let bestFine = null;
+      for (const d of [-10, -5, 0, 5, 10]) {
+        const tpl = template(a.glyph, a.rot + d, a.inverted, TPL_FINE);
+        const sc = chamfer(fine, tpl);
+        if (!bestFine || sc < bestFine.score) bestFine = { score: sc, rot: a.rot + d, extent: tpl.extent };
+      }
+      if (bestFine) { a.score = bestFine.score; a.rot = bestFine.rot; a.extent = bestFine.extent; }
+    }
+    alternatives.sort((a, b) => a.score - b.score);
+    best = alternatives[0] ?? best;
     const confidence = scoreToConfidence(best.score);
     const scaleR = parent ? parent.r : R;
     const size = (Math.max(gr.w, gr.h) / scaleR) / Math.max(best.extent, 0.2);
     const angle = ((Math.atan2(px, -py) * 180) / Math.PI + 360) % 360;
-    const rec = { glyph: best.glyph, x: px, y: py, size, rot: best.rot, inverted: best.inverted, confidence, score: best.score, angle, dist, alternatives: alternatives.map((a) => ({ glyph: a.glyph, confidence: scoreToConfidence(a.score), inverted: a.inverted })), box: { x0: gr.x0, y0: gr.y0, x1: gr.x1, y1: gr.y1 }, parent };
-    if (confidence < (opts.minConfidence ?? 0.28)) unknown.push(rec); else elements.push(rec);
+    const relExtent = Math.max(gr.w, gr.h) / scaleR;
+    const probe = probes.length;
+    probes.push({ cand, dist, inward, relExtent, pix: gr.pix });
+    return {
+      probe,
+      glyph: best.glyph, x: px, y: py, size, rot: best.rot, inverted: best.inverted, confidence, score: best.score, angle, dist,
+      // chaque candidat garde son orientation et sa taille mesurées : une
+      // ré-identification (manuelle ou par hypothèse) restitue sa géométrie
+      alternatives: alternatives.map((a) => ({ glyph: a.glyph, confidence: scoreToConfidence(a.score), inverted: a.inverted, rot: a.rot, size: relExtent / Math.max(a.extent, 0.2) })),
+      box: { x0: gr.x0, y0: gr.y0, x1: gr.x1, y1: gr.y1 }, parent,
+    };
+  };
+
+  // 4. regroupement guidé par l'appariement
+  const groups = groupComponents(glyphComps, ring, W, opts.mergeScale ?? 1);
+  const elements = [], unknown = [];
+  for (const gr of groups) {
+    const rec = matchGroup(gr);
+    if (!rec) continue;
+    const dx = (gr.cx - ring.cx) / R, dy = (gr.cy - ring.cy) / R;
+    if (Math.hypot(dx, dy) > 1.12 && !gr.comps.some((c) => c.attached)) continue; // hors du sceau
+    if (rec.confidence < (opts.minConfidence ?? 0.28)) unknown.push(rec); else elements.push(rec);
   }
 
   // 5. reconstruction du sceau
@@ -491,8 +689,70 @@ export function recognize(inputMask, opts = {}) {
   innerRings.forEach((ir, i) => { ir.index = i; });
   for (const e of elements) if (e.parent) e.parentIndex = e.parent.index;
   for (const e of unknown) if (e.parent) e.parentIndex = e.parent.index;
+  // Apparie après coup un tracé déjà repéré à un glyphe précis : la lecture par
+  // hypothèses peut ainsi tester un glyphe absent des candidats retenus.
+  const rescore = (el, glyph) => {
+    const p = probes[el.probe];
+    if (!p || !GLYPHS[glyph]) return null;
+    let best = null;
+    for (const { rot, inverted } of candidateRotations(glyph, p.dist, p.inward)) {
+      const tpl = template(glyph, rot, inverted);
+      const s = chamfer(p.cand, tpl);
+      if (!best || s < best.score) best = { glyph, rot, inverted, score: s, extent: tpl.extent };
+    }
+    if (!best) return null;
+    for (const d of [-10, -5, 5, 10]) {
+      const tpl = template(glyph, best.rot + d, best.inverted);
+      const s = chamfer(p.cand, tpl);
+      if (s < best.score) best = { glyph, rot: best.rot + d, inverted: best.inverted, score: s, extent: tpl.extent };
+    }
+    return { glyph, confidence: scoreToConfidence(best.score), inverted: best.inverted, rot: best.rot, size: p.relExtent / Math.max(best.extent, 0.2) };
+  };
+
+  // Cherche un glyphe précis à un endroit précis du sceau (coordonnées en rayons
+  // de l'anneau) : c'est ainsi qu'on vérifie l'hypothèse d'un sort connu là où le
+  // découpage automatique n'a rien isolé — sans jamais inventer d'encre.
+  const probeAt = (x, y, size, glyph, expectRot = null, claimed = null) => {
+    if (!GLYPHS[glyph]) return null;
+    const px = ring.cx + x * R, py = ring.cy + y * R;
+    const half = Math.max(3, size * R * 0.6);
+    const x0 = Math.max(0, Math.round(px - half)), x1 = Math.min(W - 1, Math.round(px + half));
+    const y0 = Math.max(0, Math.round(py - half)), y1 = Math.min(mask.height - 1, Math.round(py + half));
+    if (x1 <= x0 || y1 <= y0) return null;
+    const pts = [], used = [];
+    let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
+    for (let yy = y0; yy <= y1; yy++) for (let xx = x0; xx <= x1; xx++) {
+      const p = yy * W + xx;
+      if (!mask.data[p] || (claimed && claimed.has(p))) continue;
+      if (Math.abs(Math.hypot(xx - ring.cx, yy - ring.cy) - R) < tol) continue; // trait du cercle
+      pts.push([xx, yy]); used.push(p);
+      if (xx < bx0) bx0 = xx; if (xx > bx1) bx1 = xx; if (yy < by0) by0 = yy; if (yy > by1) by1 = yy;
+    }
+    if (pts.length < 8) return null;
+    const bw = bx1 - bx0 + 1, bh = by1 - by0 + 1;
+    if (Math.max(bw, bh) < 0.3 * size * R) return null; // trop peu d'encre pour ce glyphe
+    const cand = candidateOf(pts.map(([xx, yy]) => [xx - bx0, yy - by0]), bw, bh);
+    if (!cand.pix.length) return null;
+    const dist = Math.hypot(x, y), inward = inwardRotation(x, y);
+    const rots = expectRot === null ? candidateRotations(glyph, dist, inward)
+      : [-30, -20, -10, 0, 10, 20, 30].flatMap((d) => [{ rot: expectRot + d, inverted: false }, { rot: expectRot + d, inverted: true }]);
+    let best = null;
+    for (const { rot, inverted } of rots) {
+      const tpl = template(glyph, rot, inverted);
+      const s = chamfer(cand, tpl);
+      if (!best || s < best.score) best = { rot, inverted, score: s, extent: tpl.extent };
+    }
+    if (!best) return null;
+    return {
+      glyph, confidence: scoreToConfidence(best.score), inverted: best.inverted, rot: best.rot,
+      size: (Math.max(bw, bh) / R) / Math.max(best.extent, 0.2),
+      pix: used,
+      x: ((bx0 + bx1) / 2 - ring.cx) / R, y: ((by0 + by1) / 2 - ring.cy) / R,
+    };
+  };
+
   const result = {
-    ok: true, elements, unknown,
+    ok: true, elements, unknown, rescore, probeAt, pixelsOf: (el) => probes[el.probe]?.pix ?? [],
     ring: { cx: ring.cx * f, cy: ring.cy * f, r: R * f, rms: ring.rms * f, coverage: cov.coverage, gap: cov.gap, fallback: !!debug.ringFallback },
     innerRings: innerRings.map((ir) => ({ cx: ir.cx * f, cy: ir.cy * f, r: ir.r * f, gap: ir.gap, rx: (ir.cx - ring.cx) / R, ry: (ir.cy - ring.cy) / R, scale: ir.r / R })),
     ms: Date.now() - t0, debug,
@@ -514,8 +774,10 @@ export function assembleSeal(rec) {
 
 // Change l'identification d'un élément (correction manuelle) en gardant sa géométrie.
 export function relabel(rec, el, glyph, inverted = false) {
+  const alt = el.alternatives?.find((a) => a.glyph === glyph);
   el.glyph = glyph;
   el.inverted = inverted;
+  if (alt) { el.rot = alt.rot; el.size = alt.size; }
   el.confidence = 1;
   el.ignored = false;
   rec.seal = assembleSeal(rec);
@@ -530,3 +792,66 @@ function toElement(e) {
 }
 
 export function clearTemplateCache() { tplCache.clear(); }
+
+// ───────────────────────── Glyphe dessiné seul ─────────────────────────
+
+// Un glyphe tracé hors de tout sceau (exercice « dessinez ce signe ») : il n'y a
+// ni cercle ni voisin pour trancher, donc toute l'encre est prise en bloc,
+// normalisée et comparée aux gabarits. Une main libre penche : on essaie
+// plusieurs inclinaisons, d'abord grossièrement, puis finement sur les meilleurs.
+export function classifyGlyph(inputMask, opts = {}) {
+  const ids = opts.ids ?? Object.keys(GLYPHS);
+  const allowInverted = opts.allowInverted ?? true;
+  const tilt = opts.tilt ?? 14;
+
+  const mask = downsample(inputMask, 400);
+  const sw = estimateStrokeWidth(mask);
+  const { comps } = components(mask, Math.max(1, Math.round(sw * 1.2)));
+  if (!comps.length) return [];
+
+  // Les points isolés sont de l'encre parasite, pas un morceau du glyphe.
+  const total = comps.reduce((s, c) => s + c.area, 0);
+  const keep = comps.filter((c) => c.area >= Math.max(6, total * 0.015));
+  if (!keep.length) return [];
+
+  const W = mask.width;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const c of keep) { if (c.x0 < x0) x0 = c.x0; if (c.y0 < y0) y0 = c.y0; if (c.x1 > x1) x1 = c.x1; if (c.y1 > y1) y1 = c.y1; }
+  const pts = [];
+  for (const c of keep) for (const p of c.pix) pts.push([(p % W) - x0, ((p / W) | 0) - y0]);
+  const w = x1 - x0 + 1, h = y1 - y0 + 1;
+  if (pts.length < 12) return [];
+
+  const coarse = candidateOf(pts, w, h, TPL);
+  const invertible = (id) => allowInverted && GLYPHS[id].kind === 'sign' && GLYPHS[id].dir !== 'non' && GLYPHS[id].dir !== 'asymmetric';
+
+  const ranked = [];
+  for (const id of ids) {
+    if (!GLYPHS[id]) continue;
+    const poses = [[0, false], [-tilt, false], [tilt, false]];
+    if (invertible(id)) poses.push([0, true], [-tilt, true], [tilt, true]);
+    let best = null;
+    for (const [rot, inverted] of poses) {
+      const sc = chamfer(coarse, template(id, rot, inverted, TPL));
+      if (!best || sc < best.score) best = { glyph: id, inverted, rot, score: sc };
+    }
+    ranked.push(best);
+  }
+  ranked.sort((a, b) => a.score - b.score);
+
+  // Second passage à haute résolution : à 40 px, deux grands glyphes voisins se
+  // ressemblent trop pour être départagés.
+  const fine = candidateOf(pts, w, h, TPL_FINE);
+  const step = Math.max(4, Math.round(tilt / 2));
+  for (const a of ranked.slice(0, 6)) {
+    let best = null;
+    for (let d = -tilt; d <= tilt; d += step) {
+      const sc = chamfer(fine, template(a.glyph, a.rot + d, a.inverted, TPL_FINE));
+      if (!best || sc < best.score) best = { score: sc, rot: a.rot + d };
+    }
+    if (best) { a.score = best.score; a.rot = best.rot; }
+  }
+  ranked.sort((a, b) => a.score - b.score);
+
+  return ranked.map((r) => ({ ...r, confidence: scoreToConfidence(r.score) }));
+}

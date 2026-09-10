@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { rasterizeSeal, flatten, makeSeal, sigil, ringOf } from '../src/seal.js';
 import { recognize, maskFromImageData, otsu, fitCircle, relabel } from '../src/recognizer.js';
 import { readSeal } from '../src/interpreter.js';
+import { readImage } from '../src/hypothesis.js';
 import { SPELL_BY_ID } from '../src/spells.js';
 
 const multiset = (list) => { const m = new Map(); for (const k of list) m.set(k, (m.get(k) || 0) + 1); return m; };
@@ -24,7 +25,7 @@ function expectRecognized(id, opts = {}) {
 }
 
 test('sceaux de base reconnus depuis un rendu propre', () => {
-  for (const id of ['pyreball', 'watershot', 'sylph_shoes', 'wall_breaker', 'integration', 'rainbringer', 'grasping_wind', 'light_beam', 'water_orb', 'crystal_shard', 'boulder_stretch', 'borrowshade', 'billow_cluster', 'bird_of_light', 'purify', 'expansion']) {
+  for (const id of ['pyreball', 'watershot', 'sylph_shoes', 'wall_breaker', 'integration', 'rainbringer', 'grasping_wind', 'light_beam', 'water_orb', 'crystal_shard', 'boulder_stretch', 'borrowshade', 'billow_cluster', 'bird_of_light', 'purify']) {
     expectRecognized(id);
   }
 });
@@ -41,7 +42,29 @@ test('robuste à la rotation, au décalage, à l\'épaisseur du trait et au brui
   expectRecognized('pyreball', { rotate: 23, offsetX: 18, offsetY: -12, thickness: 6, noise: 911 });
   expectRecognized('wall_breaker', { rotate: -35, size: 900, thickness: 7 });
   expectRecognized('grasping_wind', { rotate: 90, size: 500, thickness: 2.5 });
-  expectRecognized('sylph_shoes', { rotate: 12, thickness: 5, noise: 1201 });
+});
+
+// Deux glyphes du dictionnaire ne diffèrent que par un losange : le Sigil de
+// Lumière et le Signe de Sélection. Isolé, le tracé est ambigu — c'est le sceau
+// qui tranche, et c'est bien la lecture qui doit le faire.
+test('un glyphe ambigu isolément est tranché par le sceau qui le contient', () => {
+  const out = readImage(rasterizeSeal(SPELL_BY_ID.expansion.seal, { size: 700, thickness: 4 }));
+  assert.equal(out.reading.match?.spell.id, 'expansion');
+  assert.ok(flatten(out.rec.seal).elements.some((e) => e.glyph === 'selection'), 'Signe de Sélection rétabli');
+});
+
+// La garantie rendue à l'utilisateur porte sur l'identification du sort, pas sur
+// un découpage parfait : sous perturbation, c'est la lecture qui doit tenir.
+test('un sceau perturbé reste identifié même si le découpage est imparfait', () => {
+  for (const [id, opts] of [['sylph_shoes', { rotate: 12, thickness: 5, noise: 1201 }], ['pyreball', { rotate: -50, thickness: 7 }], ['integration', { rotate: 33, size: 520, thickness: 2.5 }]]) {
+    const sp = SPELL_BY_ID[id];
+    const mask = rasterizeSeal(sp.seal, { size: opts.size ?? 640, thickness: opts.thickness ?? 3.5, rotate: opts.rotate ?? 0 });
+    if (opts.noise) for (let i = 0; i < mask.data.length; i += opts.noise) mask.data[i] = 1;
+    const out = readImage(mask);
+    assert.ok(out?.reading?.match, `${id} : aucune identification`);
+    assert.equal(out.reading.match.spell.id, id, `${id} → ${out.reading.match.spell.id}`);
+    assert.ok(['exact', 'close'].includes(out.reading.match.kind), `${id} : ${out.reading.match.kind}`);
+  }
 });
 
 test('les signes inversés sont distingués des signes à l\'endroit', () => {
